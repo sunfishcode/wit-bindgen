@@ -19,6 +19,11 @@ pub trait RustGenerator {
         true
     }
 
+    /// Return true iff the generator should use `&[u8]` instead of `&str` in bindings.
+    fn use_raw_strings(&self) -> bool {
+        false
+    }
+
     fn push_str(&mut self, s: &str);
     fn info(&self, ty: TypeId) -> TypeInfo;
     fn types_mut(&mut self) -> &mut Types;
@@ -218,7 +223,13 @@ pub trait RustGenerator {
                 TypeMode::AllBorrowed(lt) | TypeMode::LeafBorrowed(lt) => {
                     self.print_borrowed_str(lt)
                 }
-                TypeMode::Owned | TypeMode::HandlesBorrowed(_) => self.push_str("String"),
+                TypeMode::Owned | TypeMode::HandlesBorrowed(_) => {
+                    if self.use_raw_strings() {
+                        self.push_str("Vec<u8>")
+                    } else {
+                        self.push_str("String")
+                    }
+                }
             },
         }
     }
