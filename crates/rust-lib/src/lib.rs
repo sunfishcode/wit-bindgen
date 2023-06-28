@@ -52,6 +52,20 @@ impl FromStr for Ownership {
     }
 }
 
+impl fmt::Display for Ownership {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Ownership::Owning => "owning",
+            Ownership::Borrowing {
+                duplicate_if_necessary: false,
+            } => "borrowing",
+            Ownership::Borrowing {
+                duplicate_if_necessary: true,
+            } => "borrowing-duplicate-if-necessary",
+        })
+    }
+}
+
 pub trait RustGenerator<'a> {
     fn resolve(&self) -> &'a Resolve;
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String>;
@@ -75,6 +89,10 @@ pub trait RustGenerator<'a> {
     fn use_raw_strings(&self) -> bool {
         false
     }
+
+    fn is_exported_resource(&self, ty: TypeId) -> bool;
+
+    fn add_own(&mut self, resource: TypeId, handle: TypeId);
 
     fn push_str(&mut self, s: &str);
     fn info(&self, ty: TypeId) -> TypeInfo;
@@ -143,7 +161,11 @@ pub trait RustGenerator<'a> {
         sig: &FnSig,
     ) -> Vec<String> {
         let params = self.print_docs_and_params(func, param_mode, &sig);
-        self.print_results(&func.results, TypeMode::Owned);
+        if let FunctionKind::Constructor(_) = &func.kind {
+            self.push_str(" -> Self")
+        } else {
+            self.print_results(&func.results, TypeMode::Owned);
+        }
         params
     }
 
@@ -169,7 +191,11 @@ pub trait RustGenerator<'a> {
         }
         self.push_str("fn ");
         let func_name = if sig.use_item_name {
-            func.item_name()
+            if let FunctionKind::Constructor(_) = &func.kind {
+                "new"
+            } else {
+                func.item_name()
+            }
         } else {
             &func.name
         };
@@ -317,7 +343,7 @@ pub trait RustGenerator<'a> {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
                     TypeDefKind::Type(Type::String) => true,
-                    TypeDefKind::Type(_) => false,
+                    TypeDefKind::Resource | TypeDefKind::Handle(_) | TypeDefKind::Type(_) => false,
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }
@@ -353,6 +379,9 @@ pub trait RustGenerator<'a> {
                 }
                 self.push_str(")");
             }
+            TypeDefKind::Resource => {
+                panic!("unsupported anonymous type reference: resource")
+            }
             TypeDefKind::Record(_) => {
                 panic!("unsupported anonymous type reference: record")
             }
@@ -376,6 +405,28 @@ pub trait RustGenerator<'a> {
                 self.push_str(",");
                 self.print_optional_ty(stream.end.as_ref(), mode);
                 self.push_str(">");
+            }
+
+            TypeDefKind::Handle(Handle::Own(ty)) => {
+                self.add_own(*ty, id);
+                if self.is_exported_resource(*ty) {
+                    let path = self.type_path(*ty, true);
+                    if let Some((path, name)) = path.rsplit_once("::") {
+                        self.push_str(path);
+                        self.push_str("::Own");
+                        self.push_str(name);
+                    } else {
+                        self.push_str("Own");
+                        self.push_str(&path);
+                    }
+                } else {
+                    self.print_ty(&Type::Id(*ty), mode);
+                }
+            }
+
+            TypeDefKind::Handle(Handle::Borrow(ty)) => {
+                self.push_str("&");
+                self.print_ty(&Type::Id(*ty), mode);
             }
 
             TypeDefKind::Type(t) => self.print_ty(t, mode),
@@ -514,6 +565,15 @@ pub trait RustGenerator<'a> {
                         TypeDefKind::Variant(_) => out.push_str("Variant"),
                         TypeDefKind::Enum(_) => out.push_str("Enum"),
                         TypeDefKind::Union(_) => out.push_str("Union"),
+                        TypeDefKind::Resource => out.push_str("Resource"),
+                        TypeDefKind::Handle(Handle::Own(ty)) => {
+                            out.push_str("Own");
+                            self.write_name(&Type::Id(*ty), out);
+                        }
+                        TypeDefKind::Handle(Handle::Borrow(ty)) => {
+                            out.push_str("Borrow");
+                            self.write_name(&Type::Id(*ty), out);
+                        }
                         TypeDefKind::Unknown => unreachable!(),
                     },
                 }

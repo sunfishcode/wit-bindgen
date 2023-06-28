@@ -1,5 +1,6 @@
 wit_bindgen::generate!({
     path: "../../tests/runtime/ownership",
+    world_exports: Exports,
     ownership: Borrowing {
         duplicate_if_necessary: true
     }
@@ -12,8 +13,6 @@ impl PartialEq for thing_in_and_out::ThingResult {
 }
 
 struct Exports;
-
-export_ownership!(Exports);
 
 impl Ownership for Exports {
     fn foo() {

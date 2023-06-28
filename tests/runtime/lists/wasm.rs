@@ -1,13 +1,15 @@
 wit_bindgen::generate!({
     path: "../../tests/runtime/lists",
+    world_exports: Component,
+    interface_exports: {
+        "test::lists::test": Component
+    },
     ownership: Borrowing {
         duplicate_if_necessary: false
     }
 });
 
 struct Component;
-
-export_lists!(Component);
 
 impl Lists for Component {
     fn allocated_bytes() -> u32 {

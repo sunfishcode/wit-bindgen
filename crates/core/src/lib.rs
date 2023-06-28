@@ -142,6 +142,8 @@ impl Types {
                     info |= self.type_info(resolve, &field.ty);
                 }
             }
+            TypeDefKind::Resource => {}
+            TypeDefKind::Handle(_) => {}
             TypeDefKind::Tuple(t) => {
                 for ty in t.types.iter() {
                     info |= self.type_info(resolve, ty);
@@ -498,6 +500,7 @@ pub trait InterfaceGenerator<'a> {
     fn resolve(&self) -> &'a Resolve;
 
     fn type_record(&mut self, id: TypeId, name: &str, record: &Record, docs: &Docs);
+    fn type_resource(&mut self, id: TypeId, name: &str, docs: &Docs);
     fn type_flags(&mut self, id: TypeId, name: &str, flags: &Flags, docs: &Docs);
     fn type_tuple(&mut self, id: TypeId, name: &str, flags: &Tuple, docs: &Docs);
     fn type_variant(&mut self, id: TypeId, name: &str, variant: &Variant, docs: &Docs);
@@ -520,6 +523,8 @@ pub trait InterfaceGenerator<'a> {
         let ty = &self.resolve().types[id];
         match &ty.kind {
             TypeDefKind::Record(record) => self.type_record(id, name, record, &ty.docs),
+            // TODO: use real docs when they're available:
+            TypeDefKind::Resource => self.type_resource(id, name, &Docs::default()),
             TypeDefKind::Flags(flags) => self.type_flags(id, name, flags, &ty.docs),
             TypeDefKind::Tuple(tuple) => self.type_tuple(id, name, tuple, &ty.docs),
             TypeDefKind::Enum(enum_) => self.type_enum(id, name, enum_, &ty.docs),
@@ -531,6 +536,7 @@ pub trait InterfaceGenerator<'a> {
             TypeDefKind::Type(t) => self.type_alias(id, name, t, &ty.docs),
             TypeDefKind::Future(_) => todo!("generate for future"),
             TypeDefKind::Stream(_) => todo!("generate for stream"),
+            TypeDefKind::Handle(_) => todo!("generate for handle"),
             TypeDefKind::Unknown => unreachable!(),
         }
     }

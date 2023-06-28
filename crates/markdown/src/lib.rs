@@ -355,6 +355,7 @@ impl InterfaceGenerator<'_> {
                         self.push_str(")");
                     }
                     TypeDefKind::Record(_)
+                    | TypeDefKind::Resource
                     | TypeDefKind::Flags(_)
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Variant(_)
@@ -428,6 +429,16 @@ impl InterfaceGenerator<'_> {
                             self.push_str("stream");
                         }
                     },
+                    TypeDefKind::Handle(Handle::Own(ty)) => {
+                        self.push_str("own<");
+                        self.print_ty(&Type::Id(*ty));
+                        self.push_str(">");
+                    }
+                    TypeDefKind::Handle(Handle::Borrow(ty)) => {
+                        self.push_str("borrow<");
+                        self.print_ty(&Type::Id(*ty));
+                        self.push_str(">");
+                    }
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }
@@ -493,6 +504,11 @@ impl<'a> wit_bindgen_core::InterfaceGenerator<'a> for InterfaceGenerator<'a> {
             }
             self.push_str("\n");
         }
+    }
+
+    fn type_resource(&mut self, id: TypeId, name: &str, docs: &Docs) {
+        _ = (id, name, docs);
+        todo!()
     }
 
     fn type_tuple(&mut self, _id: TypeId, name: &str, tuple: &Tuple, docs: &Docs) {

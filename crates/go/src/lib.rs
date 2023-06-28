@@ -10,7 +10,7 @@ use wit_bindgen_c::{
 use wit_bindgen_core::wit_parser::{InterfaceId, Resolve, TypeOwner, WorldId};
 use wit_bindgen_core::{
     uwriteln,
-    wit_parser::{Field, Function, SizeAlign, Type, TypeDefKind, TypeId, WorldKey},
+    wit_parser::{Field, Function, Handle, SizeAlign, Type, TypeDefKind, TypeId, WorldKey},
     Files, InterfaceGenerator as _, Source, WorldGenerator,
 };
 
@@ -678,6 +678,7 @@ impl InterfaceGenerator<'_> {
                 match &ty.kind {
                     TypeDefKind::Type(t) => self.get_ty_name(t),
                     TypeDefKind::Record(_)
+                    | TypeDefKind::Resource
                     | TypeDefKind::Flags(_)
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Variant(_)
@@ -731,6 +732,20 @@ impl InterfaceGenerator<'_> {
                         src.push('T');
                         src
                     }
+                    TypeDefKind::Handle(Handle::Own(ty)) => {
+                        let mut src = String::new();
+                        src.push_str("Own");
+                        src.push_str(&self.get_ty_name(&Type::Id(*ty)));
+                        src.push('T');
+                        src
+                    }
+                    TypeDefKind::Handle(Handle::Borrow(ty)) => {
+                        let mut src = String::new();
+                        src.push_str("Borrow");
+                        src.push_str(&self.get_ty_name(&Type::Id(*ty)));
+                        src.push('T');
+                        src
+                    }
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }
@@ -767,6 +782,7 @@ impl InterfaceGenerator<'_> {
                 match &ty.kind {
                     TypeDefKind::Type(t) => self.get_c_ty_name(t),
                     TypeDefKind::Record(_)
+                    | TypeDefKind::Resource
                     | TypeDefKind::Flags(_)
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Variant(_)
@@ -806,6 +822,12 @@ impl InterfaceGenerator<'_> {
                             self.get_c_optional_type_name(s.element.as_ref()),
                             self.get_c_optional_type_name(s.end.as_ref()),
                         )
+                    }
+                    TypeDefKind::Handle(Handle::Own(ty)) => {
+                        format!("own_{}", self.get_c_ty_name(&Type::Id(*ty)))
+                    }
+                    TypeDefKind::Handle(Handle::Borrow(ty)) => {
+                        format!("borrow_{}", self.get_c_ty_name(&Type::Id(*ty)))
                     }
                     TypeDefKind::Unknown => unreachable!(),
                 }
@@ -1074,6 +1096,7 @@ impl InterfaceGenerator<'_> {
             TypeDefKind::Type(_)
             | TypeDefKind::Flags(_)
             | TypeDefKind::Record(_)
+            | TypeDefKind::Resource
             | TypeDefKind::Enum(_)
             | TypeDefKind::Variant(_)
             | TypeDefKind::Union(_) => {
@@ -1106,6 +1129,7 @@ impl InterfaceGenerator<'_> {
             TypeDefKind::List(_l) => {}
             TypeDefKind::Future(_) => todo!("print_anonymous_type for future"),
             TypeDefKind::Stream(_) => todo!("print_anonymous_type for stream"),
+            TypeDefKind::Handle(_) => todo!("print_anonymous_type for handle"),
             TypeDefKind::Unknown => unreachable!(),
         }
     }
@@ -1431,6 +1455,11 @@ impl<'a> wit_bindgen_core::InterfaceGenerator<'a> for InterfaceGenerator<'a> {
         }
         self.src.push_str("}\n\n");
         self.finish_ty(id, name, prev)
+    }
+
+    fn type_resource(&mut self, id: TypeId, name: &str, docs: &wit_bindgen_core::wit_parser::Docs) {
+        _ = (id, name, docs);
+        todo!()
     }
 
     fn type_flags(
@@ -1962,7 +1991,9 @@ impl<'a, 'b> FunctionBindgen<'a, 'b> {
                         }
                     }
                     TypeDefKind::Future(_) => todo!("impl future"),
-                    TypeDefKind::Stream(_) => todo!("impl future"),
+                    TypeDefKind::Stream(_) => todo!("impl stream"),
+                    TypeDefKind::Resource => todo!("impl resource"),
+                    TypeDefKind::Handle(_) => todo!("impl handle"),
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }
@@ -2210,6 +2241,8 @@ impl<'a, 'b> FunctionBindgen<'a, 'b> {
                     }
                     TypeDefKind::Future(_) => todo!("impl future"),
                     TypeDefKind::Stream(_) => todo!("impl stream"),
+                    TypeDefKind::Resource => todo!("impl resource"),
+                    TypeDefKind::Handle(_) => todo!("impl handle"),
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }

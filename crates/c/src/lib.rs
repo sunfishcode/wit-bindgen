@@ -12,6 +12,20 @@ use wit_bindgen_core::{
 };
 use wit_component::StringEncoding;
 
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+enum Direction {
+    #[default]
+    Import,
+    Export,
+}
+
+#[derive(Default)]
+struct ResourceInfo {
+    direction: Direction,
+    borrow: Option<TypeId>,
+    own: Option<TypeId>,
+}
+
 #[derive(Default)]
 struct C {
     src: Source,
@@ -42,6 +56,8 @@ struct C {
     // Type definitions for the given `TypeId`. This is printed topologically
     // at the end.
     types: HashMap<TypeId, wit_bindgen_core::Source>,
+
+    resources: HashMap<TypeId, ResourceInfo>,
 
     // The set of types that are considered public (aka need to be in the
     // header file) which are anonymous and we're effectively monomorphizing.
@@ -213,6 +229,7 @@ impl WorldGenerator for C {
 
     fn finish(&mut self, resolve: &Resolve, id: WorldId, files: &mut Files) {
         self.finish_types(resolve);
+
         let world = &resolve.worlds[id];
         let linking_symbol = component_type_object::linking_symbol(&world.name);
         self.include("<stdlib.h>");
@@ -355,6 +372,8 @@ impl WorldGenerator for C {
             c_str.push_str(self.src.c_helpers.as_mut_string());
         }
 
+        self.finish_resources(resolve, &mut h_str, &mut c_str);
+
         uwriteln!(c_str, "\n// Component Adapters");
 
         // Declare a statically-allocated return area, if needed. We only do
@@ -466,6 +485,135 @@ impl C {
         }
     }
 
+    fn finish_resources(
+        &self,
+        resolve: &Resolve,
+        h_str: &mut wit_bindgen_core::Source,
+        c_str: &mut wit_bindgen_core::Source,
+    ) {
+        // Workaround for the space-swallowing `Source::push_str` state machine:
+        let space = " ";
+
+        for (id, info) in &self.resources {
+            let namespace = self.owner_namespace(resolve, *id);
+            let name = resolve.types[*id].name.as_deref().unwrap();
+            let snake = name.to_snake_case();
+
+            for s in [&mut *h_str, &mut *c_str] {
+                uwriteln!(
+                    s,
+                    "\n// Functions for working with resource `{namespace}::{name}`"
+                );
+            }
+
+            if let (Direction::Import, Some(own), Some(borrow)) =
+                (&info.direction, &info.own, &info.borrow)
+            {
+                let own_namespace = self.owner_namespace(resolve, *own);
+                let own_name = format!("{own_namespace}_own_{snake}_t");
+                let borrow_namespace = self.owner_namespace(resolve, *borrow);
+                let borrow_name = format!("{borrow_namespace}_borrow_{snake}_t");
+
+                uwriteln!(
+                    h_str,
+                    "{borrow_name} {namespace}_borrow_{snake}({own_name});"
+                );
+
+                uwriteln!(
+                    c_str,
+                    "{borrow_name} {namespace}_borrow_{snake}({own_name}{space}arg) {{
+                         return ({borrow_name}) {{ arg.__handle }};
+                     }}"
+                );
+            }
+
+            if let Some(own) = &info.own {
+                let own_namespace = self.owner_namespace(resolve, *own);
+                let own_name = format!("{own_namespace}_own_{snake}_t");
+
+                uwriteln!(h_str, "void {namespace}_{snake}_drop_own({own_name});");
+
+                uwriteln!(
+                    c_str,
+                    r#"__attribute__((__import_module__("{namespace}"), __import_name__("[resource-drop-own]{name}")))
+                       void __wasm_import_{namespace}_{snake}_drop_own(int32_t);
+
+                       void {namespace}_{snake}_drop_own({own_name}{space}arg) {{
+                           __wasm_import_{namespace}_{snake}_drop_own(arg.__handle);
+                       }}"#
+                );
+            }
+
+            if let (Direction::Import, Some(borrow)) = (&info.direction, &info.borrow) {
+                let borrow_namespace = self.owner_namespace(resolve, *borrow);
+                let borrow_name = format!("{borrow_namespace}_borrow_{snake}_t");
+
+                uwriteln!(
+                    h_str,
+                    "void {borrow_namespace}_{snake}_drop_borrow({borrow_name});"
+                );
+
+                uwriteln!(
+                    c_str,
+                    r#"__attribute__((__import_module__("{borrow_namespace}"), __import_name__("[resource-drop-borrow]{name}")))
+                       void __wasm_import_{borrow_namespace}_{snake}_drop_borrow(int32_t);
+
+                       void {borrow_namespace}_{snake}_drop_borrow({borrow_name}{space}arg) {{
+                           __wasm_import_{borrow_namespace}_{snake}_drop_borrow(arg.__handle);
+                       }}"#
+                );
+            }
+
+            if let (Direction::Export, Some(own)) = (&info.direction, &info.own) {
+                let own_namespace = self.owner_namespace(resolve, *own);
+                let own_name = format!("{own_namespace}_own_{snake}_t");
+
+                uwriteln!(
+                    h_str,
+                    "{own_name} {namespace}_{snake}_new({namespace}_{snake}_t*);"
+                );
+
+                uwriteln!(
+                    c_str,
+                    r#"__attribute__((__import_module__("{namespace}"), __import_name__("[resource-new]{name}")))
+                       int32_t __wasm_import_{namespace}_{snake}_new(int32_t);
+
+                       {own_name} {namespace}_{snake}_new({namespace}_{snake}_t* arg) {{
+                           return ({own_name}) {{ __wasm_import_{namespace}_{snake}_new((int32_t) arg) }};
+                       }}"#
+                );
+
+                uwriteln!(
+                    h_str,
+                    "{namespace}_{snake}_t* {namespace}_{snake}_rep({own_name});"
+                );
+
+                uwriteln!(
+                    c_str,
+                    r#"__attribute__((__import_module__("{namespace}"), __import_name__("[resource-rep]{snake}")))
+                       int32_t __wasm_import_{namespace}_{snake}_rep(int32_t);
+
+                       {namespace}_{snake}_t* {namespace}_{snake}_rep({own_name}{space}arg) {{
+                           return ({namespace}_{snake}_t*) __wasm_import_{namespace}_{snake}_rep(arg.__handle);
+                       }}"#
+                );
+
+                uwriteln!(
+                    h_str,
+                    "void {namespace}_{snake}_destructor({namespace}_{snake}_t*);"
+                );
+
+                uwriteln!(
+                    c_str,
+                    r#"__attribute__((__export_name__("{namespace}#[dtor]{snake}")))
+                       void __wasm_export_{namespace}_{snake}_dtor({namespace}_{snake}_t* arg) {{
+                           {namespace}_{snake}_destructor(arg);
+                       }}"#
+                );
+            }
+        }
+    }
+
     fn print_anonymous_type(&mut self, resolve: &Resolve, ty: TypeId) {
         // If this anonymous type is already defined then it was referred to
         // twice from multiple various locations, so skip the second set of
@@ -485,10 +633,14 @@ impl C {
             TypeDefKind::Type(_)
             | TypeDefKind::Flags(_)
             | TypeDefKind::Record(_)
+            | TypeDefKind::Resource
             | TypeDefKind::Enum(_)
             | TypeDefKind::Variant(_)
             | TypeDefKind::Union(_) => {
                 unreachable!()
+            }
+            TypeDefKind::Handle(_) => {
+                self.src.h_defs("struct {\nint32_t __handle;\n}");
             }
             TypeDefKind::Tuple(t) => {
                 self.src.h_defs("struct {\n");
@@ -660,6 +812,8 @@ impl C {
             }
             TypeDefKind::Future(_) => todo!("print_dtor for future"),
             TypeDefKind::Stream(_) => todo!("print_dtor for stream"),
+            TypeDefKind::Resource => todo!("print_dtor for resource"),
+            TypeDefKind::Handle(_) => todo!("print_dtor for handle"),
             TypeDefKind::Unknown => unreachable!(),
         }
         self.src.c_helpers("}\n");
@@ -686,7 +840,7 @@ impl C {
         self.src.c_helpers(");\n");
     }
 
-    fn owner_namespace(&mut self, resolve: &Resolve, id: TypeId) -> String {
+    fn owner_namespace(&self, resolve: &Resolve, id: TypeId) -> String {
         let ty = &resolve.types[id];
         match ty.owner {
             TypeOwner::Interface(owner) => {
@@ -753,7 +907,35 @@ impl C {
                     }
                     None => match &ty.kind {
                         TypeDefKind::Type(t) => self.push_type_name(resolve, t, dst),
+                        TypeDefKind::Handle(Handle::Borrow(resource))
+                            if matches!(
+                                self.resources
+                                    .get(&dealias(resolve, *resource))
+                                    .map(|info| &info.direction),
+                                Some(Direction::Export)
+                            ) =>
+                        {
+                            let resource = dealias(resolve, *resource);
+                            self.resources.entry(resource).or_default().borrow = Some(*id);
+                            self.push_type_name(resolve, &Type::Id(resource), dst);
+                            dst.push_str("*");
+                        }
                         _ => {
+                            match &ty.kind {
+                                TypeDefKind::Handle(Handle::Borrow(resource)) => {
+                                    self.resources
+                                        .entry(dealias(resolve, *resource))
+                                        .or_default()
+                                        .borrow = Some(*id);
+                                }
+                                TypeDefKind::Handle(Handle::Own(resource)) => {
+                                    self.resources
+                                        .entry(dealias(resolve, *resource))
+                                        .or_default()
+                                        .own = Some(*id);
+                                }
+                                _ => {}
+                            }
                             self.public_anonymous_types.insert(*id);
                             self.private_anonymous_types.remove(id);
                             dst.push_str(&ns);
@@ -784,6 +966,7 @@ impl C {
             r#"
                 __attribute__((__weak__, __export_name__("cabi_realloc")))
                 void *cabi_realloc(void *ptr, size_t old_size, size_t align, size_t new_size) {
+                    (void) old_size;
                     if (new_size == 0) return (void*) align;
                     void *ret = realloc(ptr, new_size);
                     if (!ret) abort();
@@ -816,8 +999,8 @@ impl Return {
         match &resolve.types[id].kind {
             TypeDefKind::Type(t) => return self.return_single(resolve, t, orig_ty, sig_flattening),
 
-            // Flags are returned as their bare values, and enums are scalars
-            TypeDefKind::Flags(_) | TypeDefKind::Enum(_) => {
+            // Flags are returned as their bare values, and enums and handles are scalars
+            TypeDefKind::Flags(_) | TypeDefKind::Enum(_) | TypeDefKind::Handle(_) => {
                 self.scalar = Some(Scalar::Type(*orig_ty));
                 return;
             }
@@ -857,6 +1040,7 @@ impl Return {
 
             TypeDefKind::Future(_) => todo!("return_single for future"),
             TypeDefKind::Stream(_) => todo!("return_single for stream"),
+            TypeDefKind::Resource => todo!("return_single for resource"),
             TypeDefKind::Unknown => unreachable!(),
         }
 
@@ -883,6 +1067,31 @@ impl<'a> wit_bindgen_core::InterfaceGenerator<'a> for InterfaceGenerator<'a> {
         }
         self.src.h_defs("} ");
         self.print_typedef_target(id, name);
+
+        self.finish_ty(id, prev);
+    }
+
+    fn type_resource(&mut self, id: TypeId, name: &str, docs: &Docs) {
+        let prev = mem::take(&mut self.src.h_defs);
+
+        if !self.in_import {
+            self.gen.resources.entry(id).or_default().direction = Direction::Export;
+
+            self.src.h_defs("\n");
+            self.docs(docs, SourceType::HDefs);
+            self.src.h_defs("typedef struct ");
+            let ns = self.gen.owner_namespace(self.resolve, id).to_snake_case();
+            let snake = name.to_snake_case();
+            self.src.h_defs(&ns);
+            self.src.h_defs("_");
+            self.src.h_defs(&snake);
+            self.src.h_defs("_t ");
+            self.src.h_defs(&ns);
+            self.src.h_defs("_");
+            self.src.h_defs(&snake);
+            self.src.h_defs("_t;\n");
+            self.gen.names.insert(&format!("{ns}_{snake}_t")).unwrap();
+        }
 
         self.finish_ty(id, prev);
     }
@@ -1060,12 +1269,19 @@ impl<'a> wit_bindgen_core::InterfaceGenerator<'a> for InterfaceGenerator<'a> {
 
     fn type_alias(&mut self, id: TypeId, name: &str, ty: &Type, docs: &Docs) {
         let prev = mem::take(&mut self.src.h_defs);
-        self.src.h_defs("\n");
-        self.docs(docs, SourceType::HDefs);
-        self.src.h_defs("typedef ");
-        self.print_ty(SourceType::HDefs, ty);
-        self.src.h_defs(" ");
-        self.print_typedef_target(id, name);
+
+        let target = dealias(self.resolve, id);
+        if !matches!(&self.resolve.types[target].kind,
+                     TypeDefKind::Resource if self.gen.resources[&target].direction == Direction::Import)
+        {
+            self.src.h_defs("\n");
+            self.docs(docs, SourceType::HDefs);
+            self.src.h_defs("typedef ");
+            self.print_ty(SourceType::HDefs, ty);
+            self.src.h_defs(" ");
+            self.print_typedef_target(id, name);
+        }
+
         self.finish_ty(id, prev);
     }
 
@@ -1107,7 +1323,7 @@ impl InterfaceGenerator<'_> {
             None => name.push_str(&self.gen.world.to_snake_case()),
         }
         name.push_str("_");
-        name.push_str(&func.name.to_snake_case());
+        name.push_str(&func.name.to_snake_case().replace('.', "_"));
         name
     }
 
@@ -1618,7 +1834,7 @@ impl Bindgen for FunctionBindgen<'_, '_> {
 
     fn emit(
         &mut self,
-        _resolve: &Resolve,
+        resolve: &Resolve,
         inst: &Instruction<'_>,
         operands: &mut Vec<String>,
         results: &mut Vec<String>,
@@ -1740,6 +1956,29 @@ impl Bindgen for FunctionBindgen<'_, '_> {
                 result.push_str("}");
                 results.push(result);
             }
+
+            Instruction::HandleLower { .. } => {
+                let op = &operands[0];
+                results.push(format!("({op}).__handle"))
+            }
+
+            Instruction::HandleLift { handle, ty, .. } => match handle {
+                Handle::Borrow(resource)
+                    if matches!(
+                        self.gen.gen.resources[&dealias(resolve, *resource)].direction,
+                        Direction::Export
+                    ) =>
+                {
+                    let op = &operands[0];
+                    let name = self.gen.type_string(&Type::Id(dealias(resolve, *resource)));
+                    results.push(format!("(({name}*) {op})"))
+                }
+                _ => {
+                    let op = &operands[0];
+                    let name = self.gen.type_string(&Type::Id(*ty));
+                    results.push(format!("({name}) {{ {op} }}"))
+                }
+            },
 
             // TODO: checked
             Instruction::FlagsLower { flags, ty, .. } => match flags_repr(flags) {
@@ -2579,6 +2818,7 @@ fn push_ty_name(resolve: &Resolve, ty: &Type, src: &mut String) {
             match &ty.kind {
                 TypeDefKind::Type(t) => push_ty_name(resolve, t, src),
                 TypeDefKind::Record(_)
+                | TypeDefKind::Resource
                 | TypeDefKind::Flags(_)
                 | TypeDefKind::Enum(_)
                 | TypeDefKind::Variant(_)
@@ -2616,6 +2856,14 @@ fn push_ty_name(resolve: &Resolve, ty: &Type, src: &mut String) {
                     push_optional_ty_name(resolve, s.element.as_ref(), src);
                     src.push_str("_");
                     push_optional_ty_name(resolve, s.end.as_ref(), src);
+                }
+                TypeDefKind::Handle(handle) => {
+                    let (resource, prefix) = match handle {
+                        Handle::Own(resource) => (resource, "own_"),
+                        Handle::Borrow(resource) => (resource, "borrow_"),
+                    };
+                    src.push_str(prefix);
+                    push_ty_name(resolve, &Type::Id(*resource), src);
                 }
                 TypeDefKind::Unknown => unreachable!(),
             }
@@ -2668,9 +2916,11 @@ pub fn is_arg_by_pointer(resolve: &Resolve, ty: &Type) -> bool {
             TypeDefKind::Result(_) => true,
             TypeDefKind::Enum(_) => false,
             TypeDefKind::Flags(_) => false,
+            TypeDefKind::Handle(_) => false,
             TypeDefKind::Tuple(_) | TypeDefKind::Record(_) | TypeDefKind::List(_) => true,
             TypeDefKind::Future(_) => todo!("is_arg_by_pointer for future"),
             TypeDefKind::Stream(_) => todo!("is_arg_by_pointer for stream"),
+            TypeDefKind::Resource => todo!("is_arg_by_pointer for resource"),
             TypeDefKind::Unknown => unreachable!(),
         },
         Type::String => true,
@@ -2729,6 +2979,8 @@ pub fn owns_anything(resolve: &Resolve, ty: &Type) -> bool {
         }
         TypeDefKind::Future(_) => todo!("owns_anything for future"),
         TypeDefKind::Stream(_) => todo!("owns_anything for stream"),
+        TypeDefKind::Resource => false,
+        TypeDefKind::Handle(_) => false,
         TypeDefKind::Unknown => unreachable!(),
     }
 }
@@ -2778,5 +3030,14 @@ pub fn to_c_ident(name: &str) -> String {
         "_Packed" => "_Packed_".into(),
         "double" => "double_".into(),
         s => s.to_snake_case(),
+    }
+}
+
+fn dealias(resolve: &Resolve, mut id: TypeId) -> TypeId {
+    loop {
+        match &resolve.types[id].kind {
+            TypeDefKind::Type(Type::Id(that_id)) => id = *that_id,
+            _ => break id,
+        }
     }
 }

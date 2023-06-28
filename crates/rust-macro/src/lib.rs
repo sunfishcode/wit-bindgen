@@ -60,11 +60,23 @@ impl Parse for Config {
                     }
                     Opt::UseStdFeature => opts.std_feature = true,
                     Opt::RawStrings => opts.raw_strings = true,
-                    Opt::MacroExport => opts.macro_export = true,
                     Opt::Ownership(ownership) => opts.ownership = ownership,
-                    Opt::MacroCallPrefix(prefix) => opts.macro_call_prefix = Some(prefix.value()),
-                    Opt::ExportMacroName(name) => opts.export_macro_name = Some(name.value()),
                     Opt::Skip(list) => opts.skip.extend(list.iter().map(|i| i.value())),
+                    Opt::WorldExports(ident) => opts.world_exports = Some(ident.to_string()),
+                    Opt::InterfaceExports(exports) => opts.interface_exports.extend(
+                        exports
+                            .into_iter()
+                            .map(|export| (export.key.value(), export.value.to_string())),
+                    ),
+                    Opt::ResourceExports(exports) => opts.resource_exports.extend(
+                        exports
+                            .into_iter()
+                            .map(|export| (export.key.value(), export.value.to_string())),
+                    ),
+                    Opt::Stubs => {
+                        opts.stubs = true;
+                    }
+                    Opt::ExportPrefix(prefix) => opts.export_prefix = Some(prefix.value()),
                 }
             }
         } else {
@@ -140,14 +152,31 @@ impl Config {
 mod kw {
     syn::custom_keyword!(std_feature);
     syn::custom_keyword!(raw_strings);
-    syn::custom_keyword!(macro_export);
-    syn::custom_keyword!(macro_call_prefix);
-    syn::custom_keyword!(export_macro_name);
     syn::custom_keyword!(skip);
     syn::custom_keyword!(world);
     syn::custom_keyword!(path);
     syn::custom_keyword!(inline);
     syn::custom_keyword!(ownership);
+    syn::custom_keyword!(world_exports);
+    syn::custom_keyword!(interface_exports);
+    syn::custom_keyword!(resource_exports);
+    syn::custom_keyword!(stubs);
+    syn::custom_keyword!(export_prefix);
+}
+
+#[derive(Clone)]
+struct Export {
+    key: syn::LitStr,
+    value: syn::Ident,
+}
+
+impl Parse for Export {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let key = input.parse()?;
+        input.parse::<Token![:]>()?;
+        let value = input.parse()?;
+        Ok(Self { key, value })
+    }
 }
 
 enum Opt {
@@ -156,11 +185,13 @@ enum Opt {
     Inline(syn::LitStr),
     UseStdFeature,
     RawStrings,
-    MacroExport,
-    MacroCallPrefix(syn::LitStr),
-    ExportMacroName(syn::LitStr),
     Skip(Vec<syn::LitStr>),
     Ownership(Ownership),
+    WorldExports(syn::Ident),
+    InterfaceExports(Vec<Export>),
+    ResourceExports(Vec<Export>),
+    Stubs,
+    ExportPrefix(syn::LitStr),
 }
 
 impl Parse for Opt {
@@ -184,9 +215,6 @@ impl Parse for Opt {
         } else if l.peek(kw::raw_strings) {
             input.parse::<kw::raw_strings>()?;
             Ok(Opt::RawStrings)
-        } else if l.peek(kw::macro_export) {
-            input.parse::<kw::macro_export>()?;
-            Ok(Opt::MacroExport)
         } else if l.peek(kw::ownership) {
             input.parse::<kw::ownership>()?;
             input.parse::<Token![:]>()?;
@@ -225,14 +253,24 @@ impl Parse for Opt {
                     ));
                 }
             }))
-        } else if l.peek(kw::macro_call_prefix) {
-            input.parse::<kw::macro_call_prefix>()?;
+        } else if l.peek(kw::world_exports) {
+            input.parse::<kw::world_exports>()?;
             input.parse::<Token![:]>()?;
-            Ok(Opt::MacroCallPrefix(input.parse()?))
-        } else if l.peek(kw::export_macro_name) {
-            input.parse::<kw::export_macro_name>()?;
+            Ok(Opt::WorldExports(input.parse()?))
+        } else if l.peek(kw::interface_exports) {
+            input.parse::<kw::interface_exports>()?;
             input.parse::<Token![:]>()?;
-            Ok(Opt::ExportMacroName(input.parse()?))
+            let contents;
+            syn::braced!(contents in input);
+            let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
+            Ok(Opt::InterfaceExports(list.iter().cloned().collect()))
+        } else if l.peek(kw::resource_exports) {
+            input.parse::<kw::resource_exports>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            syn::braced!(contents in input);
+            let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
+            Ok(Opt::ResourceExports(list.iter().cloned().collect()))
         } else if l.peek(kw::skip) {
             input.parse::<kw::skip>()?;
             input.parse::<Token![:]>()?;
@@ -240,6 +278,13 @@ impl Parse for Opt {
             syn::bracketed!(contents in input);
             let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
             Ok(Opt::Skip(list.iter().cloned().collect()))
+        } else if l.peek(kw::stubs) {
+            input.parse::<kw::stubs>()?;
+            Ok(Opt::Stubs)
+        } else if l.peek(kw::export_prefix) {
+            input.parse::<kw::export_prefix>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::ExportPrefix(input.parse()?))
         } else {
             Err(l.error())
         }

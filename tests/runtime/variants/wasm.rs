@@ -1,10 +1,14 @@
-wit_bindgen::generate!(in "../../tests/runtime/variants");
+wit_bindgen::generate!({
+    path: "../../tests/runtime/variants",
+    world_exports: Component,
+    interface_exports: {
+        "test::variants::test": Component
+    }
+});
 
 use exports::test::variants::test::*;
 
 struct Component;
-
-export_variants!(Component);
 
 impl Variants for Component {
     fn test_imports() {

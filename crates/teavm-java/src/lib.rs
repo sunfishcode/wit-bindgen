@@ -880,6 +880,11 @@ impl<'a> wit_bindgen_core::InterfaceGenerator<'a> for InterfaceGenerator<'a> {
         );
     }
 
+    fn type_resource(&mut self, id: TypeId, name: &str, docs: &Docs) {
+        _ = (id, name, docs);
+        todo!()
+    }
+
     fn type_flags(&mut self, _id: TypeId, name: &str, flags: &Flags, docs: &Docs) {
         self.print_docs(docs);
 
@@ -1384,6 +1389,8 @@ impl Bindgen for FunctionBindgen<'_, '_> {
                     ));
                 }
             },
+
+            Instruction::HandleLower { .. } | Instruction::HandleLift { .. } => todo!(),
 
             Instruction::RecordLower { record, .. } => {
                 let op = &operands[0];
