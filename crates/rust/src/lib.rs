@@ -228,17 +228,19 @@ impl WorldGenerator for RustWasm {
                              fn drop(&mut self) {{
                                  unsafe {{
                                      if self.owned {{
-                                         #[link(wasm_import_module = "imports")]
+                                         #[link(wasm_import_module = "{wasm_import_module}")]
                                          extern "C" {{
-                                             #[link_name = "[resource-drop-own]{name}"]
+                                             #[cfg_attr(target_arch = "wasm32", link_name = "[resource-drop-own]{name}")]
+                                             #[cfg_attr(not(target_arch = "wasm32"), link_name = "{wasm_import_module}_[resource-drop-own]{name}")]
                                              fn wit_import(_: i32);
                                          }}
 
                                          wit_import(self.handle)
                                      }} else {{
-                                         #[link(wasm_import_module = "imports")]
+                                         #[link(wasm_import_module = "{wasm_import_module}")]
                                          extern "C" {{
-                                             #[link_name = "[resource-drop-borrow]{name}"]
+                                             #[cfg_attr(target_arch = "wasm32", link_name = "[resource-drop-borrow]{name}")]
+                                             #[cfg_attr(not(target_arch = "wasm32"), link_name = "{wasm_import_module}_[resource-drop-borrow]{name}")]
                                              fn wit_import(_: i32);
                                          }}
 
@@ -628,13 +630,19 @@ impl InterfaceGenerator<'_> {
                 let camel = name.to_upper_camel_case();
                 let snake = to_rust_ident(name);
                 let export_prefix = self.gen.opts.export_prefix.as_deref().unwrap_or("");
+                let interface_name = if let TypeOwner::Interface(id) = self.resolve.types[*id].owner
+                {
+                    &self.gen.interface_names[&id]
+                } else {
+                    unreachable!();
+                };
 
                 uwriteln!(
                     src,
                     r#"
                         const _: () = {{
                             #[doc(hidden)]
-                            #[export_name = "{export_prefix}exports#[dtor]{name}"]
+                            #[export_name = "{export_prefix}{interface_name}#[dtor]{name}"]
                             #[allow(non_snake_case)]
                             unsafe extern "C" fn __export_dtor_{snake}(arg0: i32) {{
                                 use wit_bindgen::rt::boxed::Box;
@@ -668,9 +676,10 @@ impl InterfaceGenerator<'_> {
                                 pub fn new(rep: Rep{camel}) -> Own{camel} {{
                                     use wit_bindgen::rt::boxed::Box;
                                     unsafe {{
-                                        #[link(wasm_import_module = "[export]exports")]
+                                        #[link(wasm_import_module = "[export]{interface_name}")]
                                         extern "C" {{
-                                            #[link_name = "[resource-new]{name}"]
+                                            #[cfg_attr(target_arch = "wasm32", link_name = "[resource-new]{name}")]
+                                            #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-new]{name}")]
                                             fn wit_import(_: i32) -> i32;
                                         }}
 
@@ -692,9 +701,10 @@ impl InterfaceGenerator<'_> {
 
                                 fn deref(&self) -> &Rep{camel} {{
                                     unsafe {{
-                                        #[link(wasm_import_module = "[export]exports")]
+                                        #[link(wasm_import_module = "[export]{interface_name}")]
                                         extern "C" {{
-                                            #[link_name = "[resource-rep]{name}"]
+                                            #[cfg_attr(target_arch = "wasm32", link_name = "[resource-rep]{name}")]
+                                            #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-rep]{name}")]
                                             fn wit_import(_: i32) -> i32;
                                         }}
 
@@ -708,9 +718,10 @@ impl InterfaceGenerator<'_> {
                             impl Drop for Own{camel} {{
                                 fn drop(&mut self) {{
                                     unsafe {{
-                                        #[link(wasm_import_module = "my:resources/types")]
+                                        #[link(wasm_import_module = "[export]{interface_name}")]
                                         extern "C" {{
-                                            #[link_name = "[resource-drop-own]{name}"]
+                                            #[cfg_attr(target_arch = "wasm32", link_name = "[resource-drop-own]{name}")]
+                                            #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-drop-own]{name}")]
                                             fn wit_import(_: i32);
                                         }}
 
