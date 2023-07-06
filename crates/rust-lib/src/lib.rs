@@ -409,19 +409,7 @@ pub trait RustGenerator<'a> {
 
             TypeDefKind::Handle(Handle::Own(ty)) => {
                 self.add_own(*ty, id);
-                if self.is_exported_resource(*ty) {
-                    let path = self.type_path(*ty, true);
-                    if let Some((path, name)) = path.rsplit_once("::") {
-                        self.push_str(path);
-                        self.push_str("::Own");
-                        self.push_str(name);
-                    } else {
-                        self.push_str("Own");
-                        self.push_str(&path);
-                    }
-                } else {
-                    self.print_ty(&Type::Id(*ty), mode);
-                }
+                self.print_ty(&Type::Id(*ty), mode);
             }
 
             TypeDefKind::Handle(Handle::Borrow(ty)) => {
@@ -659,11 +647,13 @@ pub trait RustGenerator<'a> {
                 self.push_str("#[component(record)]\n");
             }
 
-            if !info.has_list {
-                self.push_str("#[repr(C)]\n");
-                self.push_str("#[derive(Copy, Clone)]\n");
-            } else {
-                self.push_str("#[derive(Clone)]\n");
+            if !info.has_resource {
+                if !info.has_list {
+                    self.push_str("#[repr(C)]\n");
+                    self.push_str("#[derive(Copy, Clone)]\n");
+                } else {
+                    self.push_str("#[derive(Clone)]\n");
+                }
             }
             self.push_str(&format!("pub struct {}", name));
             self.print_generics(lt);
@@ -1063,7 +1053,7 @@ pub trait RustGenerator<'a> {
         let info = self.info(id);
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
-            self.push_str(&format!("pub type {}", name));
+            self.push_str(&format!("pub type {name}"));
             let lt = self.lifetime_for(&info, mode);
             self.print_generics(lt);
             self.push_str(" = ");
@@ -1108,6 +1098,8 @@ pub trait RustGenerator<'a> {
             .to_upper_camel_case();
         if self.uses_two_names(&info) {
             format!("{}Result", name)
+        } else if self.is_exported_resource(ty) {
+            format!("Own{name}")
         } else {
             name
         }
@@ -1393,6 +1385,15 @@ impl fmt::Display for RustFlagsRepr {
             RustFlagsRepr::U32 => "u32".fmt(f),
             RustFlagsRepr::U64 => "u64".fmt(f),
             RustFlagsRepr::U128 => "u128".fmt(f),
+        }
+    }
+}
+
+pub fn dealias(resolve: &Resolve, mut id: TypeId) -> TypeId {
+    loop {
+        match &resolve.types[id].kind {
+            TypeDefKind::Type(Type::Id(that_id)) => id = *that_id,
+            _ => break id,
         }
     }
 }

@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 macro_rules! codegen_test {
-    // todo: implement resource support and then remove the following line:
+    // todo: implement resource support and then remove the following lines:
     (resources $name:tt $test:tt) => {};
+    (resource_alias $name:tt $test:tt) => {};
 
     ($id:ident $name:tt $test:tt) => {
         #[test]

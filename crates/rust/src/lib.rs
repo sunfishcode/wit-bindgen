@@ -10,8 +10,8 @@ use wit_bindgen_core::{
     WorldGenerator,
 };
 use wit_bindgen_rust_lib::{
-    int_repr, to_rust_ident, wasm_type, FnSig, Ownership, RustFlagsRepr, RustFunctionGenerator,
-    RustGenerator, TypeMode,
+    dealias, int_repr, to_rust_ident, wasm_type, FnSig, Ownership, RustFlagsRepr,
+    RustFunctionGenerator, RustGenerator, TypeMode,
 };
 
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
@@ -207,6 +207,7 @@ impl WorldGenerator for RustWasm {
         let wasm_import_module = resolve.name_world_key(name);
         let mut gen = self.interface(Some(&wasm_import_module), resolve, true);
         gen.current_interface = Some((id, name));
+        let (snake, path_to_root, pkg) = gen.start_append_submodule(name);
         gen.types(id);
 
         let by_resource = group_by_resource(resolve.interfaces[id].functions.values());
@@ -271,7 +272,7 @@ impl WorldGenerator for RustWasm {
             }
         }
 
-        gen.finish_append_submodule(name);
+        gen.finish_append_submodule(&snake, &path_to_root, pkg);
     }
 
     fn import_funcs(
@@ -325,6 +326,7 @@ impl WorldGenerator for RustWasm {
             .ok_or_else(|| format!("interface export implementation required for `{path}`"));
         let mut gen = self.interface(None, resolve, false);
         gen.current_interface = Some((id, name));
+        let (snake, path_to_root, pkg) = gen.start_append_submodule(name);
         gen.types(id);
         gen.generate_exports(
             &inner_name.to_upper_camel_case(),
@@ -333,7 +335,7 @@ impl WorldGenerator for RustWasm {
             Some(name),
             resolve.interfaces[id].functions.values(),
         );
-        gen.finish_append_submodule(name);
+        gen.finish_append_submodule(&snake, &path_to_root, pkg);
     }
 
     fn export_funcs(
@@ -521,7 +523,16 @@ impl InterfaceGenerator<'_> {
         interface_name: Option<&WorldKey>,
         funcs: impl Iterator<Item = &'a Function>,
     ) {
-        let by_resource = group_by_resource(funcs);
+        let mut by_resource = group_by_resource(funcs);
+
+        // Make sure we at generate code for resources with no methods:
+        if let Some((id, _)) = self.current_interface {
+            for ty in self.resolve.interfaces[id].types.values() {
+                if let TypeDefKind::Resource = &self.resolve.types[*ty].kind {
+                    by_resource.entry(Some(*ty)).or_default();
+                }
+            }
+        }
 
         for (resource, funcs) in by_resource {
             let trait_name = if let Some(ty) = resource {
@@ -552,7 +563,7 @@ impl InterfaceGenerator<'_> {
             }
             uwriteln!(self.src, "}}");
 
-            if saw_export {
+            if saw_export || resource.is_some() {
                 let mut path_to_root = String::new();
                 if let Some(key) = interface_name {
                     if !self.in_import {
@@ -593,11 +604,17 @@ impl InterfaceGenerator<'_> {
                         "use {path_to_root}{impl_name} as {trait_name}Impl;"
                     );
                 }
-                self.src.push_str("const _: () = {\n");
-                for &func in &funcs {
-                    self.generate_guest_export(func, interface_name, &trait_name);
+                if saw_export {
+                    self.src.push_str("const _: () = {\n");
+                    for &func in &funcs {
+                        self.generate_guest_export(func, interface_name, &trait_name);
+                    }
+                    self.src.push_str("};\n");
                 }
-                self.src.push_str("};\n");
+
+                if let Some(ty) = resource {
+                    self.finish_resource_export(ty);
+                }
             }
         }
     }
@@ -622,124 +639,120 @@ impl InterfaceGenerator<'_> {
         mem::take(&mut self.src).into()
     }
 
-    fn finish_resources(&self) -> String {
-        let mut src = String::new();
-        for (id, info) in &self.gen.resources {
-            if let Direction::Export = info.direction {
-                let name = self.resolve.types[*id].name.as_deref().unwrap();
-                let camel = name.to_upper_camel_case();
-                let snake = to_rust_ident(name);
-                let export_prefix = self.gen.opts.export_prefix.as_deref().unwrap_or("");
-                let interface_name = if let TypeOwner::Interface(id) = self.resolve.types[*id].owner
-                {
-                    &self.gen.interface_names[&id]
-                } else {
-                    unreachable!();
-                };
+    fn finish_resource_export(&mut self, id: TypeId) {
+        let info = self.gen.resources.entry(id).or_default();
+        let name = self.resolve.types[id].name.as_deref().unwrap();
+        let camel = name.to_upper_camel_case();
+        let snake = to_rust_ident(name);
+        let export_prefix = self.gen.opts.export_prefix.as_deref().unwrap_or("");
+        let interface_name = if let TypeOwner::Interface(id) = self.resolve.types[id].owner {
+            &self.gen.interface_names[&id]
+        } else {
+            unreachable!();
+        };
 
-                uwriteln!(
-                    src,
-                    r#"
-                        const _: () = {{
-                            #[doc(hidden)]
-                            #[export_name = "{export_prefix}{interface_name}#[dtor]{name}"]
-                            #[allow(non_snake_case)]
-                            unsafe extern "C" fn __export_dtor_{snake}(arg0: i32) {{
-                                use wit_bindgen::rt::boxed::Box;
-                                drop(Box::from_raw(core::mem::transmute::<isize, *mut Rep{camel}>(
-                                    arg0.try_into().unwrap(),
-                                )))
-                            }}
-                        }};
-                    "#
-                );
+        uwriteln!(
+            self.src,
+            r#"
+                const _: () = {{
+                    #[doc(hidden)]
+                    #[export_name = "{export_prefix}{interface_name}#[dtor]{name}"]
+                    #[allow(non_snake_case)]
+                    unsafe extern "C" fn __export_dtor_{snake}(arg0: i32) {{
+                        #[allow(unused_imports)]
+                        use wit_bindgen::rt::boxed::Box;
 
-                if let Some(_) = &info.own {
-                    uwriteln!(
-                        src,
-                        r#"
-                            pub struct Own{camel} {{
-                                handle: i32,
-                            }}
+                        drop(Box::from_raw(core::mem::transmute::<isize, *mut Rep{camel}>(
+                            arg0.try_into().unwrap(),
+                        )))
+                    }}
+                }};
+            "#
+        );
 
-                            impl Own{camel} {{
-                                #[doc(hidden)]
-                                pub unsafe fn from_handle(handle: i32) -> Self {{
-                                    Self {{ handle }}
+        if info.own.is_some() {
+            uwriteln!(
+                self.src,
+                r#"
+                    #[derive(Debug)]
+                    pub struct Own{camel} {{
+                        handle: i32,
+                    }}
+
+                    impl Own{camel} {{
+                        #[doc(hidden)]
+                        pub unsafe fn from_handle(handle: i32) -> Self {{
+                            Self {{ handle }}
+                        }}
+
+                        #[doc(hidden)]
+                        pub fn into_handle(self) -> i32 {{
+                            core::mem::ManuallyDrop::new(self).handle
+                        }}
+
+                        pub fn new(rep: Rep{camel}) -> Own{camel} {{
+                            #[allow(unused_imports)]
+                            use wit_bindgen::rt::boxed::Box;
+
+                            unsafe {{
+                                #[link(wasm_import_module = "[export]{interface_name}")]
+                                extern "C" {{
+                                    #[cfg_attr(target_arch = "wasm32", link_name = "[resource-new]{name}")]
+                                    #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-new]{name}")]
+                                    fn wit_import(_: i32) -> i32;
                                 }}
 
-                                #[doc(hidden)]
-                                pub fn into_handle(self) -> i32 {{
-                                    core::mem::ManuallyDrop::new(self).handle
-                                }}
-
-                                pub fn new(rep: Rep{camel}) -> Own{camel} {{
-                                    use wit_bindgen::rt::boxed::Box;
-                                    unsafe {{
-                                        #[link(wasm_import_module = "[export]{interface_name}")]
-                                        extern "C" {{
-                                            #[cfg_attr(target_arch = "wasm32", link_name = "[resource-new]{name}")]
-                                            #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-new]{name}")]
-                                            fn wit_import(_: i32) -> i32;
-                                        }}
-
-                                        Own{camel} {{
-                                            handle: wit_import(
-                                                core::mem::transmute::<*mut Rep{camel}, isize>(
-                                                    Box::into_raw(Box::new(rep))
-                                                )
-                                                    .try_into()
-                                                    .unwrap(),
-                                            ),
-                                        }}
-                                    }}
-                                }}
-                            }}
-
-                            impl core::ops::Deref for Own{camel} {{
-                                type Target = Rep{camel};
-
-                                fn deref(&self) -> &Rep{camel} {{
-                                    unsafe {{
-                                        #[link(wasm_import_module = "[export]{interface_name}")]
-                                        extern "C" {{
-                                            #[cfg_attr(target_arch = "wasm32", link_name = "[resource-rep]{name}")]
-                                            #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-rep]{name}")]
-                                            fn wit_import(_: i32) -> i32;
-                                        }}
-
-                                        core::mem::transmute::<isize, &Rep{camel}>(
-                                            wit_import(self.handle).try_into().unwrap()
+                                Own{camel} {{
+                                    handle: wit_import(
+                                        core::mem::transmute::<*mut Rep{camel}, isize>(
+                                            Box::into_raw(Box::new(rep))
                                         )
-                                    }}
+                                            .try_into()
+                                            .unwrap(),
+                                    ),
                                 }}
                             }}
+                        }}
+                    }}
 
-                            impl Drop for Own{camel} {{
-                                fn drop(&mut self) {{
-                                    unsafe {{
-                                        #[link(wasm_import_module = "[export]{interface_name}")]
-                                        extern "C" {{
-                                            #[cfg_attr(target_arch = "wasm32", link_name = "[resource-drop-own]{name}")]
-                                            #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-drop-own]{name}")]
-                                            fn wit_import(_: i32);
-                                        }}
+                    impl core::ops::Deref for Own{camel} {{
+                        type Target = Rep{camel};
 
-                                        wit_import(self.handle)
-                                    }}
+                        fn deref(&self) -> &Rep{camel} {{
+                            unsafe {{
+                                #[link(wasm_import_module = "[export]{interface_name}")]
+                                extern "C" {{
+                                    #[cfg_attr(target_arch = "wasm32", link_name = "[resource-rep]{name}")]
+                                    #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-rep]{name}")]
+                                    fn wit_import(_: i32) -> i32;
                                 }}
+
+                                core::mem::transmute::<isize, &Rep{camel}>(
+                                    wit_import(self.handle).try_into().unwrap()
+                                )
                             }}
-                        "#
-                    );
-                }
-            }
+                        }}
+                    }}
+
+                    impl Drop for Own{camel} {{
+                        fn drop(&mut self) {{
+                            unsafe {{
+                                #[link(wasm_import_module = "[export]{interface_name}")]
+                                extern "C" {{
+                                    #[cfg_attr(target_arch = "wasm32", link_name = "[resource-drop-own]{name}")]
+                                    #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-drop-own]{name}")]
+                                    fn wit_import(_: i32);
+                                }}
+
+                                wit_import(self.handle)
+                            }}
+                        }}
+                    }}
+                "#
+            );
         }
-
-        src
     }
-
-    fn finish_append_submodule(mut self, name: &WorldKey) {
-        let module = self.finish();
+    fn start_append_submodule(&mut self, name: &WorldKey) -> (String, String, Option<PackageName>) {
         let snake = match name {
             WorldKey::Name(name) => to_rust_ident(name),
             WorldKey::Interface(id) => {
@@ -771,7 +784,16 @@ impl InterfaceGenerator<'_> {
             path.push_str(&snake);
             self.gen.interface_names.insert(id, path);
         }
-        let resources = self.finish_resources();
+        (snake, path_to_root, pkg)
+    }
+
+    fn finish_append_submodule(
+        mut self,
+        snake: &str,
+        path_to_root: &str,
+        pkg: Option<PackageName>,
+    ) {
+        let module = self.finish();
         let module = format!(
             "
                 #[allow(clippy::all)]
@@ -780,9 +802,7 @@ impl InterfaceGenerator<'_> {
                     #[doc(hidden)]
                     #[cfg(target_arch = \"wasm32\")]
                     static __FORCE_SECTION_REF: fn() = {path_to_root}__link_section;
-
                     {module}
-                    {resources}
                 }}
             ",
         );
@@ -1140,7 +1160,11 @@ impl<'a> wit_bindgen_core::InterfaceGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn type_resource(&mut self, id: TypeId, _name: &str, docs: &Docs) {
-        let entry = self.gen.resources.entry(id).or_default();
+        let entry = self
+            .gen
+            .resources
+            .entry(dealias(self.resolve, id))
+            .or_default();
         if !self.in_import {
             entry.direction = Direction::Export;
         }
@@ -1529,18 +1553,28 @@ impl Bindgen for FunctionBindgen<'_, '_> {
                     Handle::Own(resource) => ("", resource, true),
                 };
                 let resource = dealias(resolve, *resource);
-                let name = self.gen.type_path(resource, true);
 
                 results.push(
                     if let Direction::Export = self.gen.gen.resources[&resource].direction {
                         match handle {
-                            Handle::Borrow(_) => format!(
-                                "core::mem::transmute::<isize, &Rep{name}>\
-                                 ({op}.try_into().unwrap())"
-                            ),
-                            Handle::Own(_) => format!("Own{name}::from_handle({op})"),
+                            Handle::Borrow(_) => {
+                                let name = resolve.types[resource]
+                                    .name
+                                    .as_deref()
+                                    .unwrap()
+                                    .to_upper_camel_case();
+                                format!(
+                                    "core::mem::transmute::<isize, &Rep{name}>\
+                                     ({op}.try_into().unwrap())"
+                                )
+                            }
+                            Handle::Own(_) => {
+                                let name = self.gen.type_path(resource, true);
+                                format!("{name}::from_handle({op})")
+                            }
                         }
                     } else {
+                        let name = self.gen.type_path(resource, true);
                         format!("{prefix}{name}::from_handle({op}, {owned})")
                     },
                 );
@@ -2194,15 +2228,6 @@ impl Bindgen for FunctionBindgen<'_, '_> {
                     "wit_bindgen::rt::dealloc({base}, ({len} as usize) * {size}, {align});\n",
                 ));
             }
-        }
-    }
-}
-
-fn dealias(resolve: &Resolve, mut id: TypeId) -> TypeId {
-    loop {
-        match &resolve.types[id].kind {
-            TypeDefKind::Type(Type::Id(that_id)) => id = *that_id,
-            _ => break id,
         }
     }
 }

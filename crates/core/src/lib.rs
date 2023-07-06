@@ -33,8 +33,11 @@ pub struct TypeInfo {
     /// error case in the result of a function.
     pub error: bool,
 
-    /// Whether or not this type (transitively) has a list.
+    /// Whether or not this type (transitively) has a list (or string).
     pub has_list: bool,
+
+    /// Whether or not this type (transitively) has a resource (or handle).
+    pub has_resource: bool,
 }
 
 impl std::ops::BitOrAssign for TypeInfo {
@@ -43,6 +46,7 @@ impl std::ops::BitOrAssign for TypeInfo {
         self.owned |= rhs.owned;
         self.error |= rhs.error;
         self.has_list |= rhs.has_list;
+        self.has_resource |= rhs.has_resource;
     }
 }
 
@@ -142,8 +146,12 @@ impl Types {
                     info |= self.type_info(resolve, &field.ty);
                 }
             }
-            TypeDefKind::Resource => {}
-            TypeDefKind::Handle(_) => {}
+            TypeDefKind::Resource => {
+                info.has_resource = true;
+            }
+            TypeDefKind::Handle(_) => {
+                info.has_resource = true;
+            }
             TypeDefKind::Tuple(t) => {
                 for ty in t.types.iter() {
                     info |= self.type_info(resolve, ty);
