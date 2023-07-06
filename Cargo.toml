@@ -30,10 +30,10 @@ env_logger = "0.10.0"
 indexmap = "1.9.3"
 
 wasm-encoder = "0.29.0"
-wasm-metadata = { git = "https://github.com/alexcrichton/wasm-tools", branch = "wit-component-full" }
-wat =  { git = "https://github.com/alexcrichton/wasm-tools", branch = "wit-component-full" }
-wit-parser = { git = "https://github.com/alexcrichton/wasm-tools", branch = "wit-component-full" }
-wit-component =  { git = "https://github.com/alexcrichton/wasm-tools", branch = "wit-component-full" }
+wasm-metadata = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wat =  { git = "https://github.com/bytecodealliance/wasm-tools" }
+wit-parser = { git = "https://github.com/bytecodealliance/wasm-tools" }
+wit-component =  { git = "https://github.com/bytecodealliance/wasm-tools" }
 
 wit-bindgen-core = { path = 'crates/core', version = '0.8.0' }
 wit-bindgen-c = { path = 'crates/c', version = '0.8.0' }

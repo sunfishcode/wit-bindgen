@@ -100,7 +100,7 @@ checksum = "b9ccdd8f2a161be9bd5c023df56f1b2a0bd1d83872ae53b71a84a12c9bf6e842"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 2.0.23",
 ]
 
 [[package]]
@@ -205,7 +205,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 2.0.23",
 ]
 
 [[package]]
@@ -248,16 +248,16 @@ dependencies = [
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "bumpalo",
  "cranelift-bforest",
@@ -276,37 +276,37 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cranelift-codegen-shared",
 ]
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 
 [[package]]
 name = "cranelift-control"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "arbitrary",
 ]
 
 [[package]]
 name = "cranelift-entity"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cranelift-codegen",
  "log",
@@ -316,13 +316,13 @@ dependencies = [
 
 [[package]]
 name = "cranelift-isle"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 
 [[package]]
 name = "cranelift-native"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cranelift-codegen",
  "libc",
@@ -331,8 +331,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.98.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.99.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -850,9 +850,9 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.56"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
+checksum = "7b368fba921b0dce7e60f5e04ec15e565b3303972b42bcfde1d0713b881959eb"
 dependencies = [
  "unicode-ident",
 ]
@@ -879,9 +879,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.26"
+version = "1.0.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4424af4bf778aae2051a77b60283332f386554255d722233d09fbfc7e30da2fc"
+checksum = "573015e8ab27661678357f27dc26460738fd2b6c86e46f386fde94cb5d913105"
 dependencies = [
  "proc-macro2",
 ]
@@ -1034,22 +1034,22 @@ checksum = "bebd363326d05ec3e2f532ab7660680f3b02130d780c299bca73469d521bc0ed"
 
 [[package]]
 name = "serde"
-version = "1.0.160"
+version = "1.0.166"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2f3770c8bce3bcda7e149193a069a0f4365bda1fa5cd88e03bca26afc1216c"
+checksum = "d01b7404f9d441d3ad40e6a636a7782c377d2abdbe4fa2440e2edcc2f4f10db8"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.160"
+version = "1.0.166"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "291a097c63d8497e00160b166a967a4a79c64f3facdd01cbd7502231688d77df"
+checksum = "5dd83d6dde2b6b2d466e14d9d1acce8816dedee94f735eac6395808b3483c6d6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 2.0.23",
 ]
 
 [[package]]
@@ -1087,6 +1087,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
+name = "spdx"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2971cb691ca629f46174f73b1f95356c5617f89b4167f04107167c3dccb8dd89"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
 name = "sptr"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1117,9 +1126,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.15"
+version = "2.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a34fcf3e8b60f57e6a14301a2e916d323af98b0ea63c599441eec8558660c822"
+checksum = "59fb7d6d8281a51045d62b8eb3a7d1ce347b76f312af50cd3dc0af39c87c1737"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1181,7 +1190,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 2.0.23",
 ]
 
 [[package]]
@@ -1317,7 +1326,7 @@ dependencies = [
 [[package]]
 name = "wasm-encoder"
 version = "0.29.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full#04b20d4420f883b79ab0e17b9d34493e97a4b322"
+source = "git+https://github.com/bytecodealliance/wasm-tools#3e49690e39088f5679e08634f935e5235305fa22"
 dependencies = [
  "leb128",
 ]
@@ -1325,13 +1334,15 @@ dependencies = [
 [[package]]
 name = "wasm-metadata"
 version = "0.8.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full#04b20d4420f883b79ab0e17b9d34493e97a4b322"
+source = "git+https://github.com/bytecodealliance/wasm-tools#3e49690e39088f5679e08634f935e5235305fa22"
 dependencies = [
  "anyhow",
  "indexmap 2.0.0",
  "serde",
- "wasm-encoder 0.29.0 (git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full)",
- "wasmparser 0.107.0 (git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full)",
+ "serde_json",
+ "spdx",
+ "wasm-encoder 0.29.0 (git+https://github.com/bytecodealliance/wasm-tools)",
+ "wasmparser 0.107.0 (git+https://github.com/bytecodealliance/wasm-tools)",
 ]
 
 [[package]]
@@ -1347,7 +1358,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.107.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full#04b20d4420f883b79ab0e17b9d34493e97a4b322"
+source = "git+https://github.com/bytecodealliance/wasm-tools#3e49690e39088f5679e08634f935e5235305fa22"
 dependencies = [
  "indexmap 2.0.0",
  "semver",
@@ -1365,8 +1376,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1402,16 +1413,16 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-asm-macros"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cfg-if",
 ]
 
 [[package]]
 name = "wasmtime-cache"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "base64",
@@ -1429,8 +1440,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-component-macro"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "proc-macro2",
@@ -1443,13 +1454,13 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-component-util"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 
 [[package]]
 name = "wasmtime-cranelift"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -1470,8 +1481,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-cranelift-shared"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -1485,8 +1496,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-environ"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "cranelift-entity",
@@ -1506,8 +1517,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-fiber"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cc",
  "cfg-if",
@@ -1518,8 +1529,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -1543,8 +1554,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit-debug"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "object",
  "once_cell",
@@ -1553,8 +1564,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit-icache-coherence"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cfg-if",
  "libc",
@@ -1563,8 +1574,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-runtime"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "cc",
@@ -1589,8 +1600,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-types"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "cranelift-entity",
  "serde",
@@ -1600,8 +1611,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-winch"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -1616,8 +1627,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wit-bindgen"
-version = "11.0.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "12.0.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "heck",
@@ -1627,18 +1638,18 @@ dependencies = [
 [[package]]
 name = "wast"
 version = "60.0.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full#04b20d4420f883b79ab0e17b9d34493e97a4b322"
+source = "git+https://github.com/bytecodealliance/wasm-tools#3e49690e39088f5679e08634f935e5235305fa22"
 dependencies = [
  "leb128",
  "memchr",
  "unicode-width",
- "wasm-encoder 0.29.0 (git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full)",
+ "wasm-encoder 0.29.0 (git+https://github.com/bytecodealliance/wasm-tools)",
 ]
 
 [[package]]
 name = "wat"
 version = "1.0.66"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full#04b20d4420f883b79ab0e17b9d34493e97a4b322"
+source = "git+https://github.com/bytecodealliance/wasm-tools#3e49690e39088f5679e08634f935e5235305fa22"
 dependencies = [
  "wast",
 ]
@@ -1676,8 +1687,8 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "winch-codegen"
-version = "0.9.0"
-source = "git+https://github.com/dicej/wasmtime?branch=resources#98e0022aa2ed9f1bfbf716eb6a09c4b41157686b"
+version = "0.10.0"
+source = "git+https://github.com/dicej/wasmtime?branch=resources#81c9d5504d9a959402e778843223d797a6ff9588"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -1858,7 +1869,7 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "proc-macro2",
- "syn 2.0.15",
+ "syn 2.0.23",
  "wit-bindgen-core",
  "wit-bindgen-rust",
  "wit-bindgen-rust-lib",
@@ -1880,15 +1891,15 @@ dependencies = [
 [[package]]
 name = "wit-component"
 version = "0.11.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full#04b20d4420f883b79ab0e17b9d34493e97a4b322"
+source = "git+https://github.com/bytecodealliance/wasm-tools#3e49690e39088f5679e08634f935e5235305fa22"
 dependencies = [
  "anyhow",
  "bitflags 1.3.2",
  "indexmap 2.0.0",
  "log",
- "wasm-encoder 0.29.0 (git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full)",
+ "wasm-encoder 0.29.0 (git+https://github.com/bytecodealliance/wasm-tools)",
  "wasm-metadata",
- "wasmparser 0.107.0 (git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full)",
+ "wasmparser 0.107.0 (git+https://github.com/bytecodealliance/wasm-tools)",
  "wat",
  "wit-parser",
 ]
@@ -1896,7 +1907,7 @@ dependencies = [
 [[package]]
 name = "wit-parser"
 version = "0.8.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=wit-component-full#04b20d4420f883b79ab0e17b9d34493e97a4b322"
+source = "git+https://github.com/bytecodealliance/wasm-tools#3e49690e39088f5679e08634f935e5235305fa22"
 dependencies = [
  "anyhow",
  "id-arena",
