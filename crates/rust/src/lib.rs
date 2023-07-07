@@ -228,20 +228,22 @@ impl WorldGenerator for RustWasm {
                         impl Drop for {camel} {{
                              fn drop(&mut self) {{
                                  unsafe {{
+                                     #[cfg(not(target_arch = "wasm32"))]
+                                     fn wit_import(_n: i32) {{ unreachable!() }}
+
                                      if self.owned {{
                                          #[link(wasm_import_module = "{wasm_import_module}")]
                                          extern "C" {{
-                                             #[cfg_attr(target_arch = "wasm32", link_name = "[resource-drop-own]{name}")]
-                                             #[cfg_attr(not(target_arch = "wasm32"), link_name = "{wasm_import_module}_[resource-drop-own]{name}")]
+                                             #[link_name = "[resource-drop-own]{name}"]
                                              fn wit_import(_: i32);
                                          }}
 
                                          wit_import(self.handle)
                                      }} else {{
+                                         #[cfg(target_arch = "wasm32")]
                                          #[link(wasm_import_module = "{wasm_import_module}")]
                                          extern "C" {{
-                                             #[cfg_attr(target_arch = "wasm32", link_name = "[resource-drop-borrow]{name}")]
-                                             #[cfg_attr(not(target_arch = "wasm32"), link_name = "{wasm_import_module}_[resource-drop-borrow]{name}")]
+                                             #[link_name = "[resource-drop-borrow]{name}"]
                                              fn wit_import(_: i32);
                                          }}
 
@@ -695,12 +697,15 @@ impl InterfaceGenerator<'_> {
                             use wit_bindgen::rt::boxed::Box;
 
                             unsafe {{
+                                #[cfg(target_arch = "wasm32")]
                                 #[link(wasm_import_module = "[export]{interface_name}")]
                                 extern "C" {{
-                                    #[cfg_attr(target_arch = "wasm32", link_name = "[resource-new]{name}")]
-                                    #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-new]{name}")]
+                                    #[link_name = "[resource-new]{name}"]
                                     fn wit_import(_: i32) -> i32;
                                 }}
+
+                                #[cfg(not(target_arch = "wasm32"))]
+                                fn wit_import(_n: i32) -> i32 {{ unreachable!() }}
 
                                 Own{camel} {{
                                     handle: wit_import(
@@ -720,12 +725,15 @@ impl InterfaceGenerator<'_> {
 
                         fn deref(&self) -> &Rep{camel} {{
                             unsafe {{
+                                #[cfg(target_arch = "wasm32")]
                                 #[link(wasm_import_module = "[export]{interface_name}")]
                                 extern "C" {{
-                                    #[cfg_attr(target_arch = "wasm32", link_name = "[resource-rep]{name}")]
-                                    #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-rep]{name}")]
+                                    #[link_name = "[resource-rep]{name}"]
                                     fn wit_import(_: i32) -> i32;
                                 }}
+
+                                #[cfg(not(target_arch = "wasm32"))]
+                                fn wit_import(_n: i32) -> i32 {{ unreachable!() }}
 
                                 core::mem::transmute::<isize, &Rep{camel}>(
                                     wit_import(self.handle).try_into().unwrap()
@@ -737,12 +745,15 @@ impl InterfaceGenerator<'_> {
                     impl Drop for Own{camel} {{
                         fn drop(&mut self) {{
                             unsafe {{
+                                #[cfg(target_arch = "wasm32")]
                                 #[link(wasm_import_module = "[export]{interface_name}")]
                                 extern "C" {{
-                                    #[cfg_attr(target_arch = "wasm32", link_name = "[resource-drop-own]{name}")]
-                                    #[cfg_attr(not(target_arch = "wasm32"), link_name = "[export]{interface_name}_[resource-drop-own]{name}")]
+                                    #[link_name = "[resource-drop-own]{name}"]
                                     fn wit_import(_: i32);
                                 }}
+
+                                #[cfg(not(target_arch = "wasm32"))]
+                                fn wit_import(_n: i32) {{ unreachable!() }}
 
                                 wit_import(self.handle)
                             }}
@@ -1293,28 +1304,32 @@ impl<'a, 'b> FunctionBindgen<'a, 'b> {
         results: &[WasmType],
     ) -> String {
         // Define the actual function we're calling inline
+        let mut sig = "(".to_owned();
+        for param in params.iter() {
+            sig.push_str("_: ");
+            sig.push_str(wasm_type(*param));
+            sig.push_str(", ");
+        }
+        sig.push_str(")");
+        assert!(results.len() < 2);
+        for result in results.iter() {
+            sig.push_str(" -> ");
+            sig.push_str(wasm_type(*result));
+        }
         uwriteln!(
             self.src,
             "
+                #[cfg(target_arch = \"wasm32\")]
                 #[link(wasm_import_module = \"{module_name}\")]
                 extern \"C\" {{
-                    #[cfg_attr(target_arch = \"wasm32\", link_name = \"{name}\")]
-                    #[cfg_attr(not(target_arch = \"wasm32\"), link_name = \"{module_name}_{name}\")]
-                    fn wit_import(\
+                    #[link_name = \"{name}\"]
+                    fn wit_import{sig};
+                }}
+
+                #[cfg(not(target_arch = \"wasm32\"))]
+                fn wit_import{sig} {{ unreachable!() }}
             "
         );
-        for param in params.iter() {
-            self.push_str("_: ");
-            self.push_str(wasm_type(*param));
-            self.push_str(", ");
-        }
-        self.push_str(")");
-        assert!(results.len() < 2);
-        for result in results.iter() {
-            self.push_str(" -> ");
-            self.push_str(wasm_type(*result));
-        }
-        self.push_str(";\n}\n");
         "wit_import".to_string()
     }
 }
