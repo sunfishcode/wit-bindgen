@@ -636,6 +636,7 @@ impl InterfaceGenerator<'_> {
                                      unsafe fn wit_import(_n: i32) {{ unreachable!() }}
 
                                      if self.owned {{
+                                         #[cfg(target_arch = "wasm32")]
                                          #[link(wasm_import_module = "{wasm_import_module}")]
                                          extern "C" {{
                                              #[link_name = "[resource-drop-own]{name}"]
