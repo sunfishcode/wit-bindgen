@@ -182,7 +182,7 @@ impl WorldGenerator for Markdown {
         }
     }
 
-    fn export_types(
+    fn import_types(
         &mut self,
         resolve: &Resolve,
         world: WorldId,

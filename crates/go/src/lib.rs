@@ -220,7 +220,7 @@ impl WorldGenerator for TinyGo {
         self.src.push_str(&src);
     }
 
-    fn export_types(
+    fn import_types(
         &mut self,
         resolve: &Resolve,
         _world: WorldId,

@@ -423,7 +423,7 @@ pub trait WorldGenerator {
             }
         }
         if !types.is_empty() {
-            self.export_types(resolve, id, &types, files);
+            self.import_types(resolve, id, &types, files);
         }
         if !funcs.is_empty() {
             self.import_funcs(resolve, id, &funcs, files);
@@ -486,7 +486,7 @@ pub trait WorldGenerator {
         funcs: &[(&str, &Function)],
         files: &mut Files,
     );
-    fn export_types(
+    fn import_types(
         &mut self,
         resolve: &Resolve,
         world: WorldId,

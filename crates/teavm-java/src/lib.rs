@@ -162,7 +162,7 @@ impl WorldGenerator for TeaVmJava {
         gen.add_world_fragment();
     }
 
-    fn export_types(
+    fn import_types(
         &mut self,
         resolve: &Resolve,
         world: WorldId,

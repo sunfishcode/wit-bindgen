@@ -213,7 +213,7 @@ impl WorldGenerator for C {
         gen.gen.src.append(&gen.src);
     }
 
-    fn export_types(
+    fn import_types(
         &mut self,
         resolve: &Resolve,
         _world: WorldId,
