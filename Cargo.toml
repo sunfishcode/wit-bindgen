@@ -29,11 +29,11 @@ clap = { version = "4.2.2", features = ["derive"] }
 env_logger = "0.10.0"
 indexmap = "1.9.3"
 
-wasm-encoder = "0.29.0"
-wasm-metadata = { git = "https://github.com/bytecodealliance/wasm-tools" }
-wat =  { git = "https://github.com/bytecodealliance/wasm-tools" }
-wit-parser = { git = "https://github.com/bytecodealliance/wasm-tools" }
-wit-component =  { git = "https://github.com/bytecodealliance/wasm-tools" }
+wasm-encoder = "0.30.0"
+wasm-metadata = "0.9.0"
+wat = "1.0.67"
+wit-parser = "0.9.0"
+wit-component = "0.12.0"
 
 wit-bindgen-core = { path = 'crates/core', version = '0.8.0' }
 wit-bindgen-c = { path = 'crates/c', version = '0.8.0' }

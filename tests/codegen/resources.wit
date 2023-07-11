@@ -16,7 +16,7 @@ world resources {
       constructor(a: float64)
       get-a: func() -> float64
       set-a: func(a: float64)
-      static add: func(x: x, a: float64) -> x
+      add: static func(x: x, a: float64) -> x
     }
   }
 
@@ -25,7 +25,7 @@ world resources {
       constructor(a: float64)
       get-a: func() -> float64
       set-a: func(a: float64)
-      static add: func(y: y, a: float64) -> y
+      add: static func(y: y, a: float64) -> y
     }
   }
 }
