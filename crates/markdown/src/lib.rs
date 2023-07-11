@@ -507,8 +507,11 @@ impl<'a> wit_bindgen_core::InterfaceGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn type_resource(&mut self, id: TypeId, name: &str, docs: &Docs) {
-        _ = (id, name, docs);
-        todo!()
+        self.print_type_header("resource", name);
+        self.push_str("\n");
+        self.docs(docs);
+        self.push_str("\n##### Resource Members\n\n");
+        self.push_str("\nTODO\n\n");
     }
 
     fn type_tuple(&mut self, _id: TypeId, name: &str, tuple: &Tuple, docs: &Docs) {
