@@ -1,6 +1,6 @@
 mod component_type_object;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use heck::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
@@ -99,6 +99,19 @@ pub struct Opts {
     /// Configure the autodropping of borrows in exported functions.
     #[cfg_attr(feature = "clap", arg(long, default_value_t = Enabled::default()))]
     pub autodrop_borrows: Enabled,
+
+    /// Optimize functions for stream reading.
+    ///
+    /// This may be used to generate specialized bindings for imported
+    /// functions that read from streams.
+    ///
+    /// Reading from a stream involves returning a `list`, or a `result`
+    /// of a `list`, such as `wasi:io/streams#[method]input-stream.read`,
+    /// where the caller knows the maximum length of the returned data up
+    /// front. The specialized bindings work by having the caller provide a
+    /// buffer instead of allocating one dynamically using `cabi_realloc`.
+    #[clap(long = "optimize-stream-read", value_name = "INTERFACE#FUNC", value_parser = parse_optimize_stream_read)]
+    pub optimize_stream_read: Vec<(String, String)>,
 }
 
 #[cfg(feature = "clap")]
@@ -109,6 +122,13 @@ fn parse_rename(name: &str) -> Result<(String, String)> {
         Some(part) => Ok((to_rename.to_string(), part.to_string())),
         None => anyhow::bail!("`--rename` option must have an `=` in it (e.g. `--rename a=b`)"),
     }
+}
+
+#[cfg(feature = "clap")]
+fn parse_optimize_stream_read(s: &str) -> Result<(String, String)> {
+    s.split_once('#')
+        .map(|(old, new)| (old.to_string(), new.to_string()))
+        .context("expected `--optimize-stream-read` option to be of the form `INTERFACE#FUNC`")
 }
 
 impl Opts {
@@ -921,6 +941,18 @@ impl C {
                     void *ret = realloc(ptr, new_size);
                     if (!ret) abort();
                     return ret;
+                }
+
+                void *CABI_REALLOC_STREAM_PTR = NULL;
+                size_t CABI_REALLOC_STREAM_LEN = 0;
+
+                __attribute__((__weak__, __export_name__("cabi_stream_buffer")))
+                void *cabi_stream_buffer(void *ptr, size_t old_size, size_t align, size_t new_size) {
+                    if (__builtin_expect(new_size > CABI_REALLOC_STREAM_LEN, false)) {
+                        abort();
+                    }
+                    CABI_REALLOC_STREAM_LEN = 0;
+                    return CABI_REALLOC_STREAM_PTR;
                 }
             "#,
         );
@@ -1740,6 +1772,30 @@ impl InterfaceGenerator<'_> {
                 "\
                     __attribute__((__aligned__({import_return_pointer_area_align})))
                     uint8_t ret_area[{import_return_pointer_area_size}];
+                ",
+            ));
+        }
+
+        let match_interface_name = match interface_name {
+            Some(name) => self.resolve.name_world_key(name),
+            None => "$root".to_string(),
+        };
+        let match_func_name = &func.name;
+        if self
+            .gen
+            .opts
+            .optimize_stream_read
+            .iter()
+            .any(|(interface_name, func_name)| {
+                interface_name == &match_interface_name && func_name == match_func_name
+            })
+        {
+            self.src.c_adapters(&format!(
+                "\
+                    extern void *CABI_REALLOC_STREAM_PTR;
+                    extern size_t CABI_REALLOC_STREAM_LEN;
+                    CABI_REALLOC_STREAM_PTR = ret->ptr;
+                    CABI_REALLOC_STREAM_LEN = ret->len;
                 ",
             ));
         }

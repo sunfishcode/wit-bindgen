@@ -9,3 +9,12 @@ pub unsafe extern "C" fn cabi_realloc_wit_bindgen_0_23_0(
 ) -> *mut u8 {
     crate::cabi_realloc(old_ptr, old_len, align, new_len)
 }
+#[no_mangle]
+pub unsafe extern "C" fn cabi_stream_buffer_wit_bindgen_0_23_0(
+    old_ptr: *mut u8,
+    old_len: usize,
+    align: usize,
+    new_len: usize,
+) -> *mut u8 {
+    crate::cabi_stream_buffer(old_ptr, old_len, align, new_len)
+}

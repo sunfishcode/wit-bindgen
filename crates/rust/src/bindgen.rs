@@ -17,6 +17,7 @@ pub(super) struct FunctionBindgen<'a, 'b> {
     pub import_return_pointer_area_size: usize,
     pub import_return_pointer_area_align: usize,
     pub handle_decls: Vec<String>,
+    pub optimize_stream_read: bool,
 }
 
 impl<'a, 'b> FunctionBindgen<'a, 'b> {
@@ -36,6 +37,7 @@ impl<'a, 'b> FunctionBindgen<'a, 'b> {
             import_return_pointer_area_size: 0,
             import_return_pointer_area_align: 0,
             handle_decls: Vec::new(),
+            optimize_stream_read: false,
         }
     }
 
@@ -655,13 +657,21 @@ impl Bindgen for FunctionBindgen<'_, '_> {
 
             Instruction::ListCanonLift { .. } => {
                 let tmp = self.tmp();
+                let ptr = format!("ptr{}", tmp);
+                self.push_str(&format!("let {} = {};\n", ptr, operands[0]));
+                let tmp = self.tmp();
                 let len = format!("len{}", tmp);
                 self.push_str(&format!("let {} = {};\n", len, operands[1]));
-                let vec = self.gen.path_to_vec();
-                let result = format!(
-                    "{vec}::from_raw_parts({}.cast(), {1}, {1})",
-                    operands[0], len
-                );
+                let result = if self.optimize_stream_read {
+                    format!("(::core::slice::from_raw_parts_mut({ptr}, {len}), \
+                              ::core::slice::from_raw_parts_mut({ptr}.add({len}).cast(), stream_buffer.len() - {len}))")
+                } else {
+                    let vec = self.gen.path_to_vec();
+                    format!(
+                        "{vec}::from_raw_parts({}.cast(), {1}, {1})",
+                        operands[0], len
+                    )
+                };
                 results.push(result);
             }
 

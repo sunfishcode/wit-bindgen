@@ -1,4 +1,6 @@
 use crate::interface::InterfaceGenerator;
+#[cfg(feature = "clap")]
+use anyhow::Context;
 use anyhow::{bail, Result};
 use heck::*;
 use indexmap::IndexSet;
@@ -80,6 +82,13 @@ fn parse_with(s: &str) -> Result<(String, String), String> {
         format!("expected string of form `<key>=<value>[,<key>=<value>...]`; got `{s}`")
     })?;
     Ok((k.to_string(), v.to_string()))
+}
+
+#[cfg(feature = "clap")]
+fn parse_optimize_stream_read(s: &str) -> Result<(String, String)> {
+    s.split_once('#')
+        .map(|(old, new)| (old.to_string(), new.to_string()))
+        .context("expected `--optimize-stream-read` option to be of the form `INTERFACE#FUNC`")
 }
 
 #[derive(Default, Debug, Clone)]
@@ -182,6 +191,19 @@ pub struct Opts {
     /// candidate for being exported outside of the crate.
     #[cfg_attr(feature = "clap", arg(long))]
     pub pub_export_macro: bool,
+
+    /// Optimize functions for stream reading.
+    ///
+    /// This may be used to generate specialized bindings for imported
+    /// functions that read from streams.
+    ///
+    /// Reading from a stream involves returning a `list`, or a `result`
+    /// of a `list`, such as `wasi:io/streams#[method]input-stream.read`,
+    /// where the caller knows the maximum length of the returned data up
+    /// front. The specialized bindings work by having the caller provide a
+    /// buffer instead of allocating one dynamically using `cabi_realloc`.
+    #[cfg_attr(feature = "clap", arg(long = "optimize-stream-read", value_name = "INTERFACE#FUNC", value_parser = parse_optimize_stream_read))]
+    pub optimize_stream_read: Vec<(String, String)>,
 }
 
 impl Opts {

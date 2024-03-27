@@ -28,6 +28,12 @@ pub fn maybe_link_cabi_realloc() {
                 align: usize,
                 new_len: usize,
             ) -> *mut u8;
+            fn cabi_stream_buffer(
+                old_ptr: *mut u8,
+                old_len: usize,
+                align: usize,
+                new_len: usize,
+            ) -> *mut u8;
         }
         // Force the `cabi_realloc` symbol to be referenced from here. This
         // is done with a `#[used]` Rust `static` to ensure that this
@@ -43,6 +49,13 @@ pub fn maybe_link_cabi_realloc() {
             usize,
             usize,
         ) -> *mut u8 = cabi_realloc;
+        #[used]
+        static _NAME_DOES_NOT_MATTER_EITHER: unsafe extern "C" fn(
+            *mut u8,
+            usize,
+            usize,
+            usize,
+        ) -> *mut u8 = cabi_stream_buffer;
     }
 }
 
@@ -85,6 +98,34 @@ pub unsafe fn cabi_realloc(
         }
     }
     return ptr;
+}
+
+// Make a `Sync` version of `*mut u8` so that we can store it in a
+// `static mut`.
+#[repr(transparent)]
+struct Ptr(*mut u8);
+unsafe impl Sync for Ptr {}
+
+#[no_mangle]
+static mut CABI_REALLOC_STREAM_PTR: Ptr = Ptr(core::ptr::null_mut());
+#[no_mangle]
+static mut CABI_REALLOC_STREAM_LEN: usize = 0;
+
+/// NB: this function is called by a generated function in the
+/// `cabi_realloc` module above. It's otherwise never explicitly called.
+///
+/// For more information about this see `./ci/rebuild-libcabi-realloc.sh`.
+pub unsafe fn cabi_stream_buffer(
+    old_ptr: *mut u8,
+    old_len: usize,
+    align: usize,
+    new_len: usize,
+) -> *mut u8 {
+    if new_len > CABI_REALLOC_STREAM_LEN {
+        return cabi_realloc(old_ptr, old_len, align, new_len);
+    }
+    CABI_REALLOC_STREAM_LEN = 0;
+    CABI_REALLOC_STREAM_PTR.0
 }
 
 /// Provide a hook for generated export functions to run static constructors at
