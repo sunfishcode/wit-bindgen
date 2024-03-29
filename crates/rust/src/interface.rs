@@ -76,6 +76,9 @@ struct TypeMode {
     /// the next layer. This is primarily used for the "OnlyTopBorrowed"
     /// ownership style where all further layers beneath that are `Owned`.
     style: TypeOwnershipStyle,
+
+    /// Specialized optimizations.
+    optimization: TypeOptimization,
 }
 
 /// The style of ownership of a type, used to initially create a `TypeMode` and
@@ -86,10 +89,6 @@ enum TypeOwnershipStyle {
     ///
     /// Note that this primarily applies to lists.
     Owned,
-
-    /// This style is meant for things which are conceptually owned, except that
-    /// a `Vec` return value is replaced by a slice.
-    StreamBuffer,
 
     /// This style means that lists/strings are `&[T]` and `&str`.
     ///
@@ -105,23 +104,25 @@ enum TypeOwnershipStyle {
     OnlyTopBorrowed,
 }
 
+/// Optimizations that may be applied to types.
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum TypeOptimization {
+    /// No special optimizations are active.
+    Normal,
+
+    /// The "stream read" optimization is active.
+    StreamBuffer,
+}
+
 impl TypeMode {
     /// Returns a mode where everything is indicated that it's supposed to be
     /// rendered as an "owned" type.
-    fn owned() -> TypeMode {
+    fn owned(optimization: TypeOptimization) -> TypeMode {
         TypeMode {
             lifetime: None,
             lists_borrowed: false,
             style: TypeOwnershipStyle::Owned,
-        }
-    }
-
-    /// Like `owned()`, but for `TypeOwnershipStyle::StreamBuffer`.
-    fn stream_buffer() -> TypeMode {
-        TypeMode {
-            lifetime: None,
-            lists_borrowed: false,
-            style: TypeOwnershipStyle::StreamBuffer,
+            optimization,
         }
     }
 }
@@ -132,7 +133,6 @@ impl TypeOwnershipStyle {
     fn next(&self) -> TypeOwnershipStyle {
         match self {
             TypeOwnershipStyle::Owned => TypeOwnershipStyle::Owned,
-            TypeOwnershipStyle::StreamBuffer => TypeOwnershipStyle::StreamBuffer,
             TypeOwnershipStyle::Borrowed => TypeOwnershipStyle::Borrowed,
             TypeOwnershipStyle::OnlyTopBorrowed => TypeOwnershipStyle::Owned,
         }
@@ -189,7 +189,12 @@ impl InterfaceGenerator<'_> {
                 sig.self_arg = Some("&self".into());
                 sig.self_is_first_param = true;
             }
-            self.print_signature(func, true, &sig);
+            self.print_signature(
+                func,
+                TypeOwnershipStyle::Owned,
+                TypeOptimization::Normal,
+                &sig,
+            );
             self.src.push_str(";\n");
             let trait_method = mem::replace(&mut self.src, prev);
             methods.push(trait_method);
@@ -476,18 +481,15 @@ macro_rules! {macro_name} {{
                 }
             }
         }
-        self.src.push_str("#[allow(unused_unsafe, clippy::all)]\n");
-        let params = self.print_signature(func, false, &sig);
-        self.src.push_str("{\n");
-        self.src.push_str("unsafe {\n");
 
+        // Determine if the `func` is designated as a "stream read" function
+        // that we should optimize.
+        let mut optimization = TypeOptimization::Normal;
         let match_func_name = &func.name;
         let match_interface_name = match self.identifier {
             Identifier::Interface(_, key) => Some(self.resolve.name_world_key(key)),
             Identifier::World(_) => None,
         };
-
-        let mut optimize_stream_read = false;
         if let Some(match_interface_name) = match_interface_name {
             if self
                 .gen
@@ -498,24 +500,52 @@ macro_rules! {macro_name} {{
                     interface_name == &match_interface_name && func_name == match_func_name
                 })
             {
-                self.src.push_str(&format!(
-                    "\
-                        extern \"C\" {{
-                            #[no_mangle] static mut CABI_REALLOC_STREAM_PTR: *mut u8;
-                            #[no_mangle] static mut CABI_REALLOC_STREAM_LEN: usize;
-                        }}
-                        unsafe {{
-                            CABI_REALLOC_STREAM_PTR = stream_buffer.as_mut_ptr().cast();
-                            CABI_REALLOC_STREAM_LEN = stream_buffer.len();
-                        }};
-                    ",
-                ));
-                optimize_stream_read = true;
+                optimization = TypeOptimization::StreamBuffer;
             }
         }
 
+        self.src.push_str("#[allow(unused_unsafe, clippy::all)]\n");
+
+        // Select the "style" of mode that the parameter's type will be
+        // rendered as. Owned parameters are always owned, that's the easy
+        // case. Otherwise it means that we're rendering the arguments to an
+        // imported function which technically don't need ownership. In this
+        // case the `ownership` configuration is consulted.
+        //
+        // If `Owning` is specified then that means that the top-level
+        // argument will be `&T` but everything under that will be `T`. For
+        // example a record-of-lists would be passed as `&RecordOfLists` as
+        // opposed to `RecordOfLists<'a>`.
+        //
+        // In the `Borrowing` mode however a different tradeoff is made. The
+        // types are generated differently meaning that a borrowed version
+        // is used.
+        let style = match self.gen.opts.ownership {
+            Ownership::Owning => TypeOwnershipStyle::OnlyTopBorrowed,
+            Ownership::Borrowing { .. } => TypeOwnershipStyle::Borrowed,
+        };
+
+        let params = self.print_signature(func, style, optimization, &sig);
+        self.src.push_str("{\n");
+        self.src.push_str("unsafe {\n");
+
+        if let TypeOptimization::StreamBuffer = optimization {
+            self.src.push_str(&format!(
+                "\
+                    extern \"C\" {{
+                        #[no_mangle] static mut CABI_REALLOC_STREAM_PTR: *mut u8;
+                        #[no_mangle] static mut CABI_REALLOC_STREAM_LEN: usize;
+                    }}
+                    unsafe {{
+                        CABI_REALLOC_STREAM_PTR = stream_buffer.as_mut_ptr().cast();
+                        CABI_REALLOC_STREAM_LEN = stream_buffer.len();
+                    }};
+                ",
+            ));
+        }
+
         let mut f = FunctionBindgen::new(self, params);
-        f.optimize_stream_read = optimize_stream_read;
+        f.optimize_stream_read = optimization == TypeOptimization::StreamBuffer;
 
         abi::call(
             f.gen.resolve,
@@ -778,7 +808,12 @@ macro_rules! {macro_name} {{
                 sig.self_arg = Some("&self".into());
                 sig.self_is_first_param = true;
             }
-            self.print_signature(func, true, &sig);
+            self.print_signature(
+                func,
+                TypeOwnershipStyle::Owned,
+                TypeOptimization::Normal,
+                &sig,
+            );
             self.src.push_str("{ unreachable!() }\n");
         }
 
@@ -836,12 +871,18 @@ macro_rules! {macro_name} {{
         // }
     }
 
-    fn print_signature(&mut self, func: &Function, params_owned: bool, sig: &FnSig) -> Vec<String> {
-        let params = self.print_docs_and_params(func, params_owned, sig);
+    fn print_signature(
+        &mut self,
+        func: &Function,
+        style: TypeOwnershipStyle,
+        optimization: TypeOptimization,
+        sig: &FnSig,
+    ) -> Vec<String> {
+        let params = self.print_docs_and_params(func, style, optimization, sig);
         if let FunctionKind::Constructor(_) = &func.kind {
             self.push_str(" -> Self")
         } else {
-            self.print_results(&func.name, &func.results);
+            self.print_results(&func.results, optimization);
         }
         params
     }
@@ -849,7 +890,8 @@ macro_rules! {macro_name} {{
     fn print_docs_and_params(
         &mut self,
         func: &Function,
-        params_owned: bool,
+        style: TypeOwnershipStyle,
+        optimization: TypeOptimization,
         sig: &FnSig,
     ) -> Vec<String> {
         self.rustdoc(&func.docs);
@@ -895,29 +937,7 @@ macro_rules! {macro_name} {{
             self.push_str(&name);
             self.push_str(": ");
 
-            // Select the "style" of mode that the parameter's type will be
-            // rendered as. Owned parameters are always owned, that's the easy
-            // case. Otherwise it means that we're rendering the arguments to an
-            // imported function which technically don't need ownership. In this
-            // case the `ownership` configuration is consulted.
-            //
-            // If `Owning` is specified then that means that the top-level
-            // argument will be `&T` but everything under that will be `T`. For
-            // example a record-of-lists would be passed as `&RecordOfLists` as
-            // opposed to `RecordOfLists<'a>`.
-            //
-            // In the `Borrowing` mode however a different tradeoff is made. The
-            // types are generated differently meaning that a borrowed version
-            // is used.
-            let style = if params_owned {
-                TypeOwnershipStyle::Owned
-            } else {
-                match self.gen.opts.ownership {
-                    Ownership::Owning => TypeOwnershipStyle::OnlyTopBorrowed,
-                    Ownership::Borrowing { .. } => TypeOwnershipStyle::Borrowed,
-                }
-            };
-            let mode = self.type_mode_for(param, style, "'_");
+            let mode = self.type_mode_for(param, style, optimization, "'_");
             self.print_ty(param, mode);
             self.push_str(",");
 
@@ -949,32 +969,29 @@ macro_rules! {macro_name} {{
                 params.push(format!("&{name}"));
             }
         }
-        if func.name.ends_with("read") {
+        if let TypeOptimization::StreamBuffer = optimization {
             self.push_str("stream_buffer: &mut [::core::mem::MaybeUninit<u8>]");
         }
         self.push_str(")");
         params
     }
 
-    fn print_results(&mut self, name: &str, results: &Results) {
-        let style = if name.ends_with("read") {
-            TypeOwnershipStyle::StreamBuffer
-        } else {
-            TypeOwnershipStyle::Owned
-        };
+    fn print_results(&mut self, results: &Results, optimization: TypeOptimization) {
         match results.len() {
             0 => {}
             1 => {
                 self.push_str(" -> ");
                 let ty = results.iter_types().next().unwrap();
-                let mode = self.type_mode_for(ty, style, "'INVALID");
+                let mode =
+                    self.type_mode_for(ty, TypeOwnershipStyle::Owned, optimization, "'INVALID");
                 assert!(mode.lifetime.is_none());
                 self.print_ty(ty, mode);
             }
             _ => {
                 self.push_str(" -> (");
                 for ty in results.iter_types() {
-                    let mode = self.type_mode_for(ty, style, "'INVALID");
+                    let mode =
+                        self.type_mode_for(ty, TypeOwnershipStyle::Owned, optimization, "'INVALID");
                     assert!(mode.lifetime.is_none());
                     self.print_ty(ty, mode);
                     self.push_str(", ")
@@ -992,24 +1009,26 @@ macro_rules! {macro_name} {{
     ///
     /// This additionally takes a `lt` parameter which, if needed, is what will
     /// be used to render lifetimes.
-    fn type_mode_for(&self, ty: &Type, style: TypeOwnershipStyle, lt: &'static str) -> TypeMode {
+    fn type_mode_for(
+        &self,
+        ty: &Type,
+        style: TypeOwnershipStyle,
+        optimization: TypeOptimization,
+        lt: &'static str,
+    ) -> TypeMode {
         match ty {
-            Type::Id(id) => self.type_mode_for_id(*id, style, lt),
+            Type::Id(id) => self.type_mode_for_id(*id, style, optimization, lt),
 
             // Borrowed strings are handled specially here since they're the
             // only list-like primitive.
-            Type::String
-                if style != TypeOwnershipStyle::Owned
-                    && style != TypeOwnershipStyle::StreamBuffer =>
-            {
-                TypeMode {
-                    lifetime: Some(lt),
-                    lists_borrowed: true,
-                    style,
-                }
-            }
+            Type::String if style != TypeOwnershipStyle::Owned => TypeMode {
+                lifetime: Some(lt),
+                lists_borrowed: true,
+                style,
+                optimization,
+            },
 
-            _ => TypeMode::owned(),
+            _ => TypeMode::owned(optimization),
         }
     }
 
@@ -1019,6 +1038,7 @@ macro_rules! {macro_name} {{
         &self,
         ty: TypeId,
         style: TypeOwnershipStyle,
+        optimization: TypeOptimization,
         lt: &'static str,
     ) -> TypeMode {
         // NB: This method is the heart of determining how to render types.
@@ -1048,7 +1068,7 @@ macro_rules! {macro_name} {{
             // Borrowed handles always have a lifetime associated with them so
             // thread it through.
             Some(lt)
-        } else if style == TypeOwnershipStyle::Owned || style == TypeOwnershipStyle::StreamBuffer {
+        } else if style == TypeOwnershipStyle::Owned {
             // If this type is being rendered as an "owned" type, and it
             // doesn't have any borrowed handles, then no lifetimes are needed
             // since any internal lists will be their owned version.
@@ -1108,6 +1128,7 @@ macro_rules! {macro_name} {{
                         lifetime: Some(lt),
                         lists_borrowed: true,
                         style: TypeOwnershipStyle::OnlyTopBorrowed,
+                        optimization,
                     };
                 }
             }
@@ -1128,6 +1149,8 @@ macro_rules! {macro_name} {{
             } else {
                 style
             },
+
+            optimization,
         }
     }
 
@@ -1139,14 +1162,8 @@ macro_rules! {macro_name} {{
     /// `ty`.
     fn filter_mode(&self, ty: &Type, mode: TypeMode) -> TypeMode {
         match mode.lifetime {
-            Some(lt) => self.type_mode_for(ty, mode.style.next(), lt),
-            None => {
-                if mode.style == TypeOwnershipStyle::StreamBuffer {
-                    TypeMode::stream_buffer()
-                } else {
-                    TypeMode::owned()
-                }
-            }
+            Some(lt) => self.type_mode_for(ty, mode.style.next(), mode.optimization, lt),
+            None => TypeMode::owned(mode.optimization),
         }
     }
 
@@ -1247,7 +1264,7 @@ macro_rules! {macro_name} {{
                         self.push_str(lt);
                         self.push_str(" ");
                     }
-                    self.type_mode_for_id(id, TypeOwnershipStyle::Owned, lt)
+                    self.type_mode_for_id(id, TypeOwnershipStyle::Owned, mode.optimization, lt)
                 } else {
                     mode
                 }
@@ -1257,7 +1274,7 @@ macro_rules! {macro_name} {{
             let name = self.type_path(
                 id,
                 match mode.style {
-                    TypeOwnershipStyle::StreamBuffer | TypeOwnershipStyle::Owned => true,
+                    TypeOwnershipStyle::Owned => true,
                     TypeOwnershipStyle::OnlyTopBorrowed | TypeOwnershipStyle::Borrowed => false,
                 },
             );
@@ -1361,7 +1378,9 @@ macro_rules! {macro_name} {{
 
     fn print_list(&mut self, ty: &Type, mode: TypeMode) {
         let next_mode = self.filter_mode(ty, mode);
-        if mode.style == TypeOwnershipStyle::StreamBuffer {
+        if mode.style == TypeOwnershipStyle::Owned
+            && mode.optimization == TypeOptimization::StreamBuffer
+        {
             self.push_str("(&mut [u8], &mut [::core::mem::MaybeUninit<u8>])");
         } else if mode.lists_borrowed {
             let lifetime = mode.lifetime.unwrap();
@@ -1407,8 +1426,18 @@ macro_rules! {macro_name} {{
 
         // Generate one mode for when the type is owned and another for when
         // it's borrowed.
-        let a = self.type_mode_for_id(ty, TypeOwnershipStyle::Owned, "'a");
-        let b = self.type_mode_for_id(ty, TypeOwnershipStyle::Borrowed, "'a");
+        let a = self.type_mode_for_id(
+            ty,
+            TypeOwnershipStyle::Owned,
+            TypeOptimization::Normal,
+            "'a",
+        );
+        let b = self.type_mode_for_id(
+            ty,
+            TypeOwnershipStyle::Borrowed,
+            TypeOptimization::Normal,
+            "'a",
+        );
 
         if self.uses_two_names(&info) {
             // If this type uses two names then, well, it uses two names. In
@@ -1788,7 +1817,7 @@ macro_rules! {macro_name} {{
             self.push_str(" {}\n");
         } else {
             self.print_rust_enum_debug(
-                TypeMode::owned(),
+                TypeMode::owned(TypeOptimization::Normal),
                 &name,
                 enum_
                     .cases
@@ -1814,7 +1843,7 @@ macro_rules! {macro_name} {{
             let name = name.to_upper_camel_case();
             self.push_str(&format!("pub type {name}Borrow<'a>"));
             self.push_str(" = ");
-            self.print_ty(ty, TypeMode::owned());
+            self.print_ty(ty, TypeMode::owned(TypeOptimization::Normal));
             self.push_str("Borrow<'a>");
             self.push_str(";\n");
         }
@@ -2323,7 +2352,7 @@ impl<'a> {camel}Borrow<'a>{{
         self.src
             .push_str(&format!("pub type {}", name.to_upper_camel_case()));
         self.src.push_str(" = ");
-        self.print_ty(ty, TypeMode::owned());
+        self.print_ty(ty, TypeMode::owned(TypeOptimization::Normal));
         self.src.push_str(";\n");
     }
 }
