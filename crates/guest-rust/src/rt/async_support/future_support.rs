@@ -604,7 +604,7 @@ unsafe impl<O: FutureOps> WaitableOp for FutureWriteOp<O> {
     type Result = (WriteComplete<O::Payload>, RawFutureWriter<O>);
     type Cancel = RawFutureWriteCancel<O>;
 
-    fn start(&mut self, (mut writer, value): Self::Start) -> (u32, Self::InProgress) {
+    fn start(&self, (mut writer, value): Self::Start) -> (u32, Self::InProgress) {
         // TODO: it should be safe to store the lower-destination in
         // `WaitableOperation` using `Pin` memory and such, but that would
         // require some type-level trickery to get a correctly-sized value
@@ -626,7 +626,7 @@ unsafe impl<O: FutureOps> WaitableOp for FutureWriteOp<O> {
         (code, (writer, cleanup))
     }
 
-    fn start_cancelled(&mut self, (writer, value): Self::Start) -> Self::Cancel {
+    fn start_cancelled(&self, (writer, value): Self::Start) -> Self::Cancel {
         RawFutureWriteCancel::Cancelled(value, writer)
     }
 
@@ -883,7 +883,7 @@ unsafe impl<O: FutureOps> WaitableOp for FutureReadOp<O> {
     type Result = (ReadComplete<O::Payload>, RawFutureReader<O>);
     type Cancel = Result<O::Payload, RawFutureReader<O>>;
 
-    fn start(&mut self, mut reader: Self::Start) -> (u32, Self::InProgress) {
+    fn start(&self, mut reader: Self::Start) -> (u32, Self::InProgress) {
         let (ptr, cleanup) = Cleanup::new(reader.ops.elem_layout());
         // SAFETY: `ptr` is allocated with `vtable.layout` and should be
         // safe to use here. Its lifetime for the async operation is hinged on
@@ -893,7 +893,7 @@ unsafe impl<O: FutureOps> WaitableOp for FutureReadOp<O> {
         (code, (reader, cleanup))
     }
 
-    fn start_cancelled(&mut self, state: Self::Start) -> Self::Cancel {
+    fn start_cancelled(&self, state: Self::Start) -> Self::Cancel {
         Err(state)
     }
 

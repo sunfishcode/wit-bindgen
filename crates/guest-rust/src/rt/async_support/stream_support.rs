@@ -52,19 +52,19 @@ pub unsafe trait StreamOps: Clone {
     /// cleaned up.
     unsafe fn dealloc_lists(&mut self, dst: *mut u8);
     /// Converts from the canonical ABI representation to a Rust value.
-    unsafe fn lift(&mut self, dst: *mut u8) -> Self::Payload;
+    unsafe fn lift(&self, dst: *mut u8) -> Self::Payload;
     /// The `stream.write` intrinsic
-    unsafe fn start_write(&mut self, stream: u32, val: *const u8, amt: usize) -> u32;
+    unsafe fn start_write(&self, stream: u32, val: *const u8, amt: usize) -> u32;
     /// The `stream.read` intrinsic
-    unsafe fn start_read(&mut self, stream: u32, val: *mut u8, amt: usize) -> u32;
+    unsafe fn start_read(&self, stream: u32, val: *mut u8, amt: usize) -> u32;
     /// The `stream.cancel-read` intrinsic
-    unsafe fn cancel_read(&mut self, stream: u32) -> u32;
+    unsafe fn cancel_read(&self, stream: u32) -> u32;
     /// The `stream.cancel-write` intrinsic
-    unsafe fn cancel_write(&mut self, stream: u32) -> u32;
+    unsafe fn cancel_write(&self, stream: u32) -> u32;
     /// The `stream.drop-readable` intrinsic
-    unsafe fn drop_readable(&mut self, stream: u32);
+    unsafe fn drop_readable(&self, stream: u32);
     /// The `stream.drop-writable` intrinsic
-    unsafe fn drop_writable(&mut self, stream: u32);
+    unsafe fn drop_writable(&self, stream: u32);
 }
 /// Operations that a stream requires throughout the implementation.
 ///
@@ -137,25 +137,25 @@ unsafe impl<T: 'static> StreamOps for &StreamVtable<T> {
             unsafe { f(dst) }
         }
     }
-    unsafe fn lift(&mut self, dst: *mut u8) -> Self::Payload {
+    unsafe fn lift(&self, dst: *mut u8) -> Self::Payload {
         unsafe { (self.lift.unwrap())(dst) }
     }
-    unsafe fn start_write(&mut self, stream: u32, val: *const u8, amt: usize) -> u32 {
+    unsafe fn start_write(&self, stream: u32, val: *const u8, amt: usize) -> u32 {
         unsafe { (self.start_write)(stream, val, amt) }
     }
-    unsafe fn start_read(&mut self, stream: u32, val: *mut u8, amt: usize) -> u32 {
+    unsafe fn start_read(&self, stream: u32, val: *mut u8, amt: usize) -> u32 {
         unsafe { (self.start_read)(stream, val, amt) }
     }
-    unsafe fn cancel_read(&mut self, stream: u32) -> u32 {
+    unsafe fn cancel_read(&self, stream: u32) -> u32 {
         unsafe { (self.cancel_read)(stream) }
     }
-    unsafe fn cancel_write(&mut self, stream: u32) -> u32 {
+    unsafe fn cancel_write(&self, stream: u32) -> u32 {
         unsafe { (self.cancel_write)(stream) }
     }
-    unsafe fn drop_readable(&mut self, stream: u32) {
+    unsafe fn drop_readable(&self, stream: u32) {
         unsafe { (self.drop_readable)(stream) }
     }
-    unsafe fn drop_writable(&mut self, stream: u32) {
+    unsafe fn drop_writable(&self, stream: u32) {
         unsafe { (self.drop_writable)(stream) }
     }
 }
@@ -193,7 +193,7 @@ pub type StreamWriter<T> = RawStreamWriter<&'static StreamVtable<T>>;
 pub struct RawStreamWriter<O: StreamOps> {
     handle: u32,
     ops: O,
-    done: bool,
+    done: std::cell::Cell<bool>,
 }
 
 impl<O> RawStreamWriter<O>
@@ -205,7 +205,7 @@ where
         Self {
             handle,
             ops,
-            done: false,
+            done: std::cell::Cell::new(false),
         }
     }
 
@@ -371,8 +371,9 @@ where
     type Result = (StreamResult, AbiBuffer<O>);
     type Cancel = (StreamResult, AbiBuffer<O>);
 
-    fn start(&mut self, buf: Self::Start) -> (u32, Self::InProgress) {
-        if self.writer.done {
+    fn start(&self, buf: Self::Start) -> (u32, Self::InProgress) {
+        assert!(false);
+        if self.writer.done.get() {
             return (DROPPED, buf);
         }
 
@@ -391,7 +392,7 @@ where
         (code, buf)
     }
 
-    fn start_cancelled(&mut self, buf: Self::Start) -> Self::Cancel {
+    fn start_cancelled(&self, buf: Self::Start) -> Self::Cancel {
         (StreamResult::Cancelled, buf)
     }
 
@@ -410,7 +411,7 @@ where
                 let amt = amt.try_into().unwrap();
                 buf.advance(amt);
                 if let ReturnCode::Dropped(_) = code {
-                    self.writer.done = true;
+                    self.writer.done.set(true);
                 }
                 Ok((StreamResult::Complete(amt), buf))
             }
@@ -471,7 +472,7 @@ pub type StreamReader<T> = RawStreamReader<&'static StreamVtable<T>>;
 pub struct RawStreamReader<O: StreamOps> {
     handle: AtomicU32,
     ops: O,
-    done: bool,
+    done: std::cell::Cell<bool>,
 }
 
 impl<O: StreamOps> fmt::Debug for RawStreamReader<O> {
@@ -488,7 +489,7 @@ impl<O: StreamOps> RawStreamReader<O> {
         Self {
             handle: AtomicU32::new(handle),
             ops,
-            done: false,
+            done: std::cell::Cell::new(false),
         }
     }
 
@@ -527,7 +528,7 @@ impl<O: StreamOps> RawStreamReader<O> {
     /// futures, but it does not mean that no values were read. To accurately
     /// determine if values were read the [`StreamRead::cancel`] method must be
     /// used.
-    pub fn read(&mut self, buf: Vec<O::Payload>) -> RawStreamRead<'_, O> {
+    pub fn read(&self, buf: Vec<O::Payload>) -> RawStreamRead<'_, O> {
         RawStreamRead {
             op: WaitableOperation::new(StreamReadOp { reader: self }, buf),
         }
@@ -548,7 +549,7 @@ impl<O: StreamOps> RawStreamReader<O> {
     ///
     /// This method will read all remaining items from this stream into a list
     /// and await the stream to be dropped.
-    pub async fn collect(mut self) -> Vec<O::Payload> {
+    pub async fn collect(self) -> Vec<O::Payload> {
         let mut ret = Vec::new();
         loop {
             // If there's no more spare capacity then reserve room for one item
@@ -590,7 +591,7 @@ pub struct RawStreamRead<'a, O: StreamOps> {
 }
 
 struct StreamReadOp<'a, O: StreamOps> {
-    reader: &'a mut RawStreamReader<O>,
+    reader: &'a RawStreamReader<O>,
 }
 
 unsafe impl<'a, O: StreamOps> WaitableOp for StreamReadOp<'a, O> {
@@ -599,8 +600,8 @@ unsafe impl<'a, O: StreamOps> WaitableOp for StreamReadOp<'a, O> {
     type Result = (StreamResult, Vec<O::Payload>);
     type Cancel = (StreamResult, Vec<O::Payload>);
 
-    fn start(&mut self, mut buf: Self::Start) -> (u32, Self::InProgress) {
-        if self.reader.done {
+    fn start(&self, mut buf: Self::Start) -> (u32, Self::InProgress) {
+        if self.reader.done.get() {
             return (DROPPED, (buf, None));
         }
 
@@ -635,7 +636,7 @@ unsafe impl<'a, O: StreamOps> WaitableOp for StreamReadOp<'a, O> {
         (code, (buf, cleanup))
     }
 
-    fn start_cancelled(&mut self, buf: Self::Start) -> Self::Cancel {
+    fn start_cancelled(&self, buf: Self::Start) -> Self::Cancel {
         (StreamResult::Cancelled, buf)
     }
 
@@ -690,7 +691,7 @@ unsafe impl<'a, O: StreamOps> WaitableOp for StreamReadOp<'a, O> {
                 // allocations have been read from it and appended to `buf`.
                 drop(cleanup);
                 if let ReturnCode::Dropped(_) = code {
-                    self.reader.done = true;
+                    self.reader.done.set(true);
                 }
                 Ok((StreamResult::Complete(amt), buf))
             }

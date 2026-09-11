@@ -42,14 +42,14 @@ pub unsafe trait Subtask {
 
     /// The in-memory layout of both parameters and results allocated with
     /// parameters coming first.
-    fn abi_layout(&mut self) -> Layout;
+    fn abi_layout(&self) -> Layout;
 
     /// The offset, in bytes, from the start of `ABI_LAYOUT` to where the
     /// results will be stored.
-    fn results_offset(&mut self) -> usize;
+    fn results_offset(&self) -> usize;
 
     /// The raw function import using `[async-lower]` and the canonical ABI.
-    unsafe fn call_import(&mut self, params: Self::ParamsLower, results: *mut u8) -> u32;
+    unsafe fn call_import(&self, params: Self::ParamsLower, results: *mut u8) -> u32;
 
     /// Bindings-generated version of lowering `params`.
     ///
@@ -60,7 +60,7 @@ pub unsafe trait Subtask {
     /// Note that `ParamsLower` may return `dst` if there are more ABI
     /// parameters than are allowed flat params (as specified by the canonical
     /// ABI).
-    unsafe fn params_lower(&mut self, params: Self::Params, dst: *mut u8) -> Self::ParamsLower;
+    unsafe fn params_lower(&self, params: Self::Params, dst: *mut u8) -> Self::ParamsLower;
 
     /// Bindings-generated version of deallocating any lists stored within
     /// `lower`.
@@ -105,7 +105,7 @@ unsafe impl<T: Subtask> WaitableOp for SubtaskOps<'_, T> {
     type Result = Result<T::Results, ()>;
     type Cancel = Result<T::Results, ()>;
 
-    fn start(&mut self, state: Self::Start) -> (u32, Self::InProgress) {
+    fn start(&self, state: Self::Start) -> (u32, Self::InProgress) {
         unsafe {
             let (ptr_params, cleanup) = Cleanup::new(self.0.abi_layout());
             let ptr_results = ptr_params.add(self.0.results_offset());
@@ -128,7 +128,7 @@ unsafe impl<T: Subtask> WaitableOp for SubtaskOps<'_, T> {
         }
     }
 
-    fn start_cancelled(&mut self, _state: Self::Start) -> Self::Cancel {
+    fn start_cancelled(&self, _state: Self::Start) -> Self::Cancel {
         Err(())
     }
 

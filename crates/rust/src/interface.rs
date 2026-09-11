@@ -1059,10 +1059,7 @@ fn abi_layout(&mut self) -> ::core::alloc::Layout {{
             }
             None => "0".to_string(),
         };
-        uwriteln!(
-            self.src,
-            "fn results_offset(&mut self) -> usize {{ {offset} }}"
-        );
+        uwriteln!(self.src, "fn results_offset(&self) -> usize {{ {offset} }}");
 
         // Generate `fn call_import`
         let import_name = &func.name;

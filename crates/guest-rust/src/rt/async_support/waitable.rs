@@ -132,7 +132,7 @@ pub unsafe trait WaitableOp {
     /// This method will actually call `{future,stream}.{read,write}` with
     /// `state` provided. The return code of the intrinsic is returned here
     /// along with the `InProgress` state.
-    fn start(&mut self, state: Self::Start) -> (u32, Self::InProgress);
+    fn start(&self, state: Self::Start) -> (u32, Self::InProgress);
 
     /// Optionally complete the async operation.
     ///
@@ -150,7 +150,7 @@ pub unsafe trait WaitableOp {
 
     /// Conversion from the "start" state to the "cancel" result, needed when an
     /// operation is cancelled before it's started.
-    fn start_cancelled(&mut self, state: Self::Start) -> Self::Cancel;
+    fn start_cancelled(&self, state: Self::Start) -> Self::Cancel;
 
     /// Acquires the component-model `waitable` index that the `InProgress`
     /// state is waiting on.
